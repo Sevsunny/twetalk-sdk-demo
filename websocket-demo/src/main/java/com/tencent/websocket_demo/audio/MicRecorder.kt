@@ -9,11 +9,10 @@ import android.os.SystemClock
 class MicRecorder(
     private val sampleRate: Int = 16000,
     private val chunkMs: Int = 20, // 20ms -> 640 bytes @16k/16bit/mono
-    private val onChunk: (bytes: ByteArray, startTime: Long) -> Unit
+    private val onChunk: (bytes: ByteArray) -> Unit
 ) {
     private var recorder: AudioRecord? = null
     @Volatile private var running = false
-    private var startElapsedMs: Long = 0
 
     @SuppressLint("MissingPermission")
     fun start() {
@@ -36,14 +35,13 @@ class MicRecorder(
 
         running = true
         recorder?.startRecording()
-        startElapsedMs = SystemClock.elapsedRealtime()
 
         Thread({
             val chunk = ByteArray(frameBytes)
             while (running) {
                 val read = recorder?.read(chunk, 0, chunk.size) ?: break
                 if (read > 0) {
-                    onChunk(if (read == chunk.size) chunk.copyOf() else chunk.copyOf(read), startElapsedMs)
+                    onChunk(if (read == chunk.size) chunk.copyOf() else chunk.copyOf(read))
                 }
             }
         }, "MicRecorder").start()

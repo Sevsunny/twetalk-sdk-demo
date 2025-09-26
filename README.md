@@ -4,6 +4,8 @@
 
 ### WebSocket
 
+#### 接入指引
+
 1. 引入依赖
 
     SnapShot 版本：
@@ -40,13 +42,13 @@
     Groovy:
 
     ``` groovy
-    implementation 'com.tencent.twetalk:twetalk-android:1.0.3-SNAPSHOT'
+    implementation 'com.tencent.twetalk:twetalk-android:1.0.4-SNAPSHOT'
     ```
 
     Kotlin DSL:
 
     ``` kotlin
-    implementation("com.tencent.twetalk:twetalk-android:1.0.3-SNAPSHOT")
+    implementation("com.tencent.twetalk:twetalk-android:1.0.4-SNAPSHOT")
     ```
 
 2. 创建 TWeTalkClient
@@ -101,63 +103,21 @@
 
 3. 调用接口传输数据
 
-    1. 封装传输消息的帧格式
-
-        ``` Kotlin
-        // 音频消息，默认采样率为 16000，单声道
-        // audioData: 音频数据  startTime: 启动连接的时间
-        val audioFrame = FrameProcessor.buildAudioRawTime(audioData, startTime)
-
-        // 自定义音频帧
-        val audioRawFrame = FramesProtos.AudioRawFrame
-                            .newBuilder()
-                            .setId(id)
-                            .setName(name)
-                            .setAudio(ByteString.copyFrom(audioData))
-                            .setSampleRate(sampleRate)
-                            .setNumChannels(channel)
-                            .setPts(pts)
-                            .build()
-
-        val audioFrame = FramesProtos.Frame.newBuilder()
-                            .setAudio(audioRawFrame)
-                            .build()
-
-        // 其它消息格式
-        // 文本消息
-        val textFrame = FrameProcessor.buildTextFrame(text)
-        
-        或
-
-        val textRawFrame = FramesProtos.TextFrame.newBuilder()
-                            .setId(id)
-                            .setName(name)
-                            .setText(text)
-                            .build()
-        
-        val textFrame = FramesProtos.Frame.newBuilder()
-                            .setText(textFrame)
-                            .build()
-
-        // 自定义消息，一般发送 json 格式 string 消息
-        val customMsgFrame = FrameProcessor.buildCustomMsgFrame(message)
-
-        或
-
-        val customMsgRawFrame = FramesProtos.MessageFrame.newBuilder()
-                                    .setData(message)
-                                    .build()
-
-        val customMsgFrame = FramesProtos.Frame.newBuilder()
-                                .setMessage(customMsgRawFrame)
-                                .build()
-
-        ```
-
-    2. 调用 sendDirectly 发送消息
+    1. 发送音频数据
 
        ``` Kotlin
-        client?.sendDirectly(Frame)
+        // 默认发送
+        client?.sendAudioData(audioData)
+
+        // 指定采样率和通道数
+        client?.sendCustomAudioData(audioData, sampleRate, channels)
+       ```
+
+    2. 发送自定义消息数据
+
+       ``` Kotlin
+       // msg 为 json 格式的字符串
+        client?.sendCustomMsg(msg)
        ```
 
 4. 在 onRecvMessage 回调中接收服务端传过来的数据并处理
@@ -166,10 +126,79 @@
     override fun onRecvMessage(message: TWeTalkMessage) {
         ......
     }
-
-
    ```
+
+#### TWeTalkMessage 格式
+
+消息格式：
+
+``` Java
+public class TWeTalkMessage {
+    private final TWeTalkMessageType type;    // 消息类型
+    private Object data;    // 消息携带的数据
+}
+```
+
+类型：
+
+``` Java
+public enum TWeTalkMessageType {
+    /** 音频消息 **/
+    AUDIO_DATA("audio-data"),
+
+    /** 转录消息 */
+    USER_TRANSCRIPTION("user-transcription"),             // 本地用户语音转文本
+    BOT_TRANSCRIPTION("bot-transcription"),               // 机器人完整文本转录
+    USER_STARTED_SPEAKING("user-started-speaking"),       // 用户开始说话
+    USER_STOPPED_SPEAKING("user-stopped-speaking"),       // 用户停止说话
+    BOT_STARTED_SPEAKING("bot-started-speaking"),         // 机器人开始说话
+    BOT_STOPPED_SPEAKING("bot-stopped-speaking"),         // 机器人停止说话
+
+    /** LLM 消息 */
+    USER_LLM_TEXT("user-llm-text"),               // 聚合后的用户输入文本
+    BOT_LLM_TEXT("bot-llm-text"),                 // LLM 返回的流式 token
+    BOT_LLM_STARTED("bot-llm-started"),           // 机器人 LLM 推理开始
+    BOT_LLM_STOPPED("bot-llm-stopped"),           // 机器人 LLM 推理结束
+
+    /** TTS 消息 */
+    BOT_TTS_TEXT("bot-tts-text"),                 // 机器人 TTS 文本输出
+    BOT_TTS_STARTED("bot-tts-started"),           // 机器人 TTS 响应开始
+    BOT_TTS_STOPPED("bot-tts-stopped")           // 机器人 TTS 响应结束
+    ;
+}
+```
+
+音频消息：
+
+``` Java
+public class AudioMessage {
+    private final byte[] audio;  // 音频数据
+    private final int sampleRate;  // 采样率
+    private final int numChannels;  // 通道数
+}
+```
 
 ### TRTC
 
 待实现
+
+## Demo 使用指引
+
+### websocket-demo
+
+将 MainActivity 下的 config 参数替换为对应参数：
+
+``` Kotlin
+private val config: TWeTalkConfig by lazy {
+    val authConfig = TWeTalkConfig.AuthConfig(
+        "<Your SecretId>",
+        "<Your SecretKey>",
+        "<Your ProductId>", "<Your DeviceName>", "pcm")
+
+    TWeTalkConfig.builder()
+        .authConfig(authConfig)
+        .build()
+}
+```
+
+然后编译后安装运行即可。

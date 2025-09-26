@@ -23,6 +23,10 @@ import com.tencent.twetalk.protocol.FrameProcessor
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.websocket_demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class MainActivity : AppCompatActivity() {
     private val binding by lazy { ActivityMainBinding.inflate(layoutInflater) }
@@ -127,9 +131,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun startMic() {
         if (mic != null) return
-        mic = MicRecorder(sampleRate = 16000, chunkMs = 20) { bytes, startTime ->
-            val audioFrame = FrameProcessor.buildAudioRawFrame(bytes, startTime)
-            client?.sendDirectly(audioFrame)
+        mic = MicRecorder(sampleRate = 16000, chunkMs = 20) { bytes ->
+            client?.sendAudioData(bytes)
         }.also { it.start() }
     }
 
@@ -138,10 +141,20 @@ class MainActivity : AppCompatActivity() {
         mic = null
     }
 
-    private fun appendLog(msg: String) {
+    private fun appendLog(msg: String, needLineBreak: Boolean = true) {
         lifecycleScope.launch {
-            val text = binding.tvLog.text.toString()
-            binding.tvLog.text = if (text.isEmpty()) msg else "$text\n\n$msg"
+            val lineBreak = if (needLineBreak) "\n\n" else ""
+
+            // 更新文本
+            if (binding.tvLog.text.isEmpty()) {
+                binding.tvLog.text = msg
+            } else {
+                binding.tvLog.append("$lineBreak$msg")
+            }
+
+            binding.scrollView.post {
+                binding.scrollView.smoothScrollTo(0, binding.tvLog.bottom)
+            }
         }
     }
 
@@ -161,45 +174,59 @@ class MainActivity : AppCompatActivity() {
             TWeTalkMessage.TWeTalkMessageType.BOT_READY -> {}
             TWeTalkMessage.TWeTalkMessageType.ERROR -> {}
 
-            TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION,
-            TWeTalkMessage.TWeTalkMessageType.USER_TRANSCRIPTION -> {
-                if (message.data is String) {
-                    try {
-                        val jsonData = JSON.parseObject(message.data as String)
-                        val text = jsonData.getString("text")
+            // 处理用户说话
+            TWeTalkMessage.TWeTalkMessageType.USER_LLM_TEXT -> {
+                appendLog("${now()} Me: \n\n")
+                handleTextMessage(message)
+            }
 
-                        if (message.type.equals(TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION)) {
-                            appendLog("${message.type.value}, text: \n$text")
-                        } else {
-                            val userId = jsonData.getString("user_id")
-                            val timestamp = jsonData.getString("timestamp")
-                            val final = jsonData.getBoolean("final")
+            // 处理机器人说话
+            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STARTED -> {
+                appendLog("${now()} Bot: \n\n")
+            }
 
-                            appendLog("${message.type.value}, user_id: $userId, timestamp: $timestamp, " +
-                                    "final: $final, text: \n$text")
-                        }
+            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_TEXT -> {
+                handleTextMessage(message)
+            }
 
-                    } catch (e: JSONException) {
-                        Log.e(TAG, "handleMessage: unknown json data: ${message.data as String}, error msg: ${e.message}")
-                    }
-                }
+            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STOPPED -> {
+                appendLog("\n")
             }
 
             // 其余消息根据情况处理
+            TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION,
+            TWeTalkMessage.TWeTalkMessageType.USER_TRANSCRIPTION,
             TWeTalkMessage.TWeTalkMessageType.USER_STARTED_SPEAKING,
             TWeTalkMessage.TWeTalkMessageType.USER_STOPPED_SPEAKING,
             TWeTalkMessage.TWeTalkMessageType.BOT_STARTED_SPEAKING,
             TWeTalkMessage.TWeTalkMessageType.BOT_STOPPED_SPEAKING,
-            TWeTalkMessage.TWeTalkMessageType.USER_LLM_TEXT,
-            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_TEXT,
-            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STARTED,
-            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STOPPED,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_TEXT,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STARTED,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STOPPED -> {
                 Log.d(TAG, "handleMessage, data: $message")
             }
         }
+    }
+
+    private fun handleTextMessage(message: TWeTalkMessage) {
+        if (message.data is String) {
+            try {
+                val jsonData = JSON.parseObject(message.data as String)
+                val text = jsonData.getString("text")
+                appendLog(text, false)
+            } catch (e: JSONException) {
+                Log.e(
+                    TAG,
+                    "handleMessage: unknown json data: ${message.data as String}, error msg: ${e.message}"
+                )
+            }
+        }
+    }
+
+    private fun now(): String {
+        val sdf = SimpleDateFormat("yyyy/MM/dd HH:mm:ss", Locale.getDefault())
+        sdf.timeZone = TimeZone.getDefault()
+        return sdf.format(Date())
     }
 
     override fun onDestroy() {
