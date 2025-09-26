@@ -9,6 +9,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.alibaba.fastjson2.JSON
+import com.alibaba.fastjson2.JSONException
 import com.tencent.websocket_demo.audio.MicRecorder
 import com.tencent.websocket_demo.audio.RemotePcmPlayer
 import com.tencent.twetalk.core.ConnectionState
@@ -18,7 +20,7 @@ import com.tencent.twetalk.core.TWeTalkClientListener
 import com.tencent.twetalk.core.TWeTalkConfig
 import com.tencent.twetalk.metrics.MetricEvent
 import com.tencent.twetalk.protocol.FrameProcessor
-import com.tencent.twetalk.protocol.FramesProtos
+import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.websocket_demo.databinding.ActivityMainBinding
 import kotlinx.coroutines.launch
 
@@ -83,10 +85,8 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            override fun onRecvStream(buffer: ByteArray?) {
-                if (buffer == null) return
-                val frame = FrameProcessor.decode(buffer)
-                handleFrame(frame)
+            override fun onRecvMessage(message: TWeTalkMessage) {
+                handleMessage(message)
             }
 
             override fun onMetrics(metrics: MetricEvent?) {
@@ -147,33 +147,57 @@ class MainActivity : AppCompatActivity() {
 
     private fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
-    private fun handleFrame(frame: FramesProtos.Frame) {
-        when (frame.frameCase) {
-            FramesProtos.Frame.FrameCase.TRANSCRIPTION -> {
-                val t = frame.transcription
-                Log.i(TAG, "Transcription: ${t.text} [user=${t.userId}, ts=${t.timestamp}]")
+    private fun handleMessage(message: TWeTalkMessage) {
+        when (message.type) {
+            TWeTalkMessage.TWeTalkMessageType.AUDIO_DATA -> {
+                if (message.data is TWeTalkMessage.AudioMessage) {
+                    val audioMsg = message.data as TWeTalkMessage.AudioMessage
+                    val sr = if (audioMsg.sampleRate > 0) audioMsg.sampleRate else sampleRate
+                    val ch = if (audioMsg.numChannels > 0) audioMsg.numChannels else 1
+                    remotePlayer.play(audioMsg.audio, sr, ch)
+                }
             }
 
-            FramesProtos.Frame.FrameCase.MESSAGE -> {
-                val jsonData = frame.message.data
-                Log.i(TAG, "ServerMessage: $jsonData")
-                appendLog("ServerMessage: $jsonData")
+            TWeTalkMessage.TWeTalkMessageType.BOT_READY -> {}
+            TWeTalkMessage.TWeTalkMessageType.ERROR -> {}
+
+            TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION,
+            TWeTalkMessage.TWeTalkMessageType.USER_TRANSCRIPTION -> {
+                if (message.data is String) {
+                    try {
+                        val jsonData = JSON.parseObject(message.data as String)
+                        val text = jsonData.getString("text")
+
+                        if (message.type.equals(TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION)) {
+                            appendLog("${message.type.value}, text: \n$text")
+                        } else {
+                            val userId = jsonData.getString("user_id")
+                            val timestamp = jsonData.getString("timestamp")
+                            val final = jsonData.getBoolean("final")
+
+                            appendLog("${message.type.value}, user_id: $userId, timestamp: $timestamp, " +
+                                    "final: $final, text: \n$text")
+                        }
+
+                    } catch (e: JSONException) {
+                        Log.e(TAG, "handleMessage: unknown json data: ${message.data as String}, error msg: ${e.message}")
+                    }
+                }
             }
 
-            FramesProtos.Frame.FrameCase.TEXT -> {
-                Log.i(TAG, "ServerText: ${frame.text.text}")
-            }
-
-            FramesProtos.Frame.FrameCase.AUDIO -> {
-                val a = frame.audio
-                val sr = if (a.sampleRate > 0) a.sampleRate else sampleRate
-                val ch = if (a.numChannels > 0) a.numChannels else 1
-                val data = a.audio.toByteArray()
-                remotePlayer.play(data, sr, ch)
-            }
-
-            FramesProtos.Frame.FrameCase.FRAME_NOT_SET -> {
-                Log.e(TAG, "Frame not set")
+            // 其余消息根据情况处理
+            TWeTalkMessage.TWeTalkMessageType.USER_STARTED_SPEAKING,
+            TWeTalkMessage.TWeTalkMessageType.USER_STOPPED_SPEAKING,
+            TWeTalkMessage.TWeTalkMessageType.BOT_STARTED_SPEAKING,
+            TWeTalkMessage.TWeTalkMessageType.BOT_STOPPED_SPEAKING,
+            TWeTalkMessage.TWeTalkMessageType.USER_LLM_TEXT,
+            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_TEXT,
+            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STARTED,
+            TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STOPPED,
+            TWeTalkMessage.TWeTalkMessageType.BOT_TTS_TEXT,
+            TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STARTED,
+            TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STOPPED -> {
+                Log.d(TAG, "handleMessage, data: $message")
             }
         }
     }

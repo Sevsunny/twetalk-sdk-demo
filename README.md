@@ -40,13 +40,13 @@
     Groovy:
 
     ``` groovy
-    implementation 'com.tencent.twetalk:twetalk-android:1.0.0-SNAPSHOT'
+    implementation 'com.tencent.twetalk:twetalk-android:1.0.3-SNAPSHOT'
     ```
 
     Kotlin DSL:
 
     ``` kotlin
-    implementation("com.tencent.twetalk:twetalk-android:1.0.0-SNAPSHOT")
+    implementation("com.tencent.twetalk:twetalk-android:1.0.3-SNAPSHOT")
     ```
 
 2. 创建 TWeTalkClient
@@ -84,7 +84,7 @@
                 ......
             }
 
-            override fun onRecvStream(buffer: ByteArray?) {
+            override fun onRecvMessage(message: TWeTalkMessage) {
                 // 接收到服务端传过来的数据
                 ......
             }
@@ -105,7 +105,7 @@
 
         ``` Kotlin
         // 音频消息，默认采样率为 16000，单声道
-        // audioData: 音频数据  startTime: 开始录制音频的时间
+        // audioData: 音频数据  startTime: 启动连接的时间
         val audioFrame = FrameProcessor.buildAudioRawTime(audioData, startTime)
 
         // 自定义音频帧
@@ -160,12 +160,13 @@
         client?.sendDirectly(Frame)
        ```
 
-4. 在 onRecvStream 回调中接收服务端传过来的数据并处理
+4. 在 onRecvMessage 回调中接收服务端传过来的数据并处理
 
    ``` Kotlin
-    override fun onRecvStream(buffer: ByteArray?) {
+    override fun onRecvMessage(message: TWeTalkMessage) {
         ......
     }
+
 
    ```
 
