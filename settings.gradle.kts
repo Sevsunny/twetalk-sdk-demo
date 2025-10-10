@@ -30,4 +30,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "twetalk-sdk-demo"
 include(":app")
-include(":websocket-demo")
+include(":websocket-demo", ":trtc-demo")
