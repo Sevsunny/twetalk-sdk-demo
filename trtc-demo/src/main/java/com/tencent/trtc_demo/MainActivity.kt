@@ -44,6 +44,7 @@ class MainActivity : AppCompatActivity(), TRTCClientListener {
         .userId("<Your userId>")
         .productId("<Your ProductId>")
         .deviceName("<Your DeviceName>")
+        .language("en")
         .context(this)
         .build()
 

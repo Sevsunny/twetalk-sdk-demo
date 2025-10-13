@@ -45,6 +45,7 @@ class MainActivity : AppCompatActivity() {
 
         TWeTalkConfig.builder()
             .authConfig(authConfig)
+            .isMetricOpen(true)
             .build()
     }
 
@@ -94,7 +95,9 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onMetrics(metrics: MetricEvent?) {
-                appendLog("onMetrics：${metrics?.type}")
+                if (metrics?.type == MetricEvent.Type.RTT) {
+                    Log.d("Metric", "onMetrics: $metrics")
+                }
             }
 
             override fun onError(error: Throwable?) {
@@ -193,17 +196,29 @@ class MainActivity : AppCompatActivity() {
                 appendLog("\n")
             }
 
+            TWeTalkMessage.TWeTalkMessageType.USER_STARTED_SPEAKING -> {
+                Log.d("Metric", "User start speaking...")
+            }
+
+            TWeTalkMessage.TWeTalkMessageType.USER_STOPPED_SPEAKING -> {
+                Log.d("Metric", "User stop speaking.")
+            }
+
+            TWeTalkMessage.TWeTalkMessageType.BOT_STARTED_SPEAKING -> {
+                Log.d("Metric", "Bot start speaking...")
+            }
+
+            TWeTalkMessage.TWeTalkMessageType.BOT_STOPPED_SPEAKING -> {
+                Log.d("Metric", "Bot stop speaking.")
+            }
+
             // 其余消息根据情况处理
             TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION,
             TWeTalkMessage.TWeTalkMessageType.USER_TRANSCRIPTION,
-            TWeTalkMessage.TWeTalkMessageType.USER_STARTED_SPEAKING,
-            TWeTalkMessage.TWeTalkMessageType.USER_STOPPED_SPEAKING,
-            TWeTalkMessage.TWeTalkMessageType.BOT_STARTED_SPEAKING,
-            TWeTalkMessage.TWeTalkMessageType.BOT_STOPPED_SPEAKING,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_TEXT,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STARTED,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STOPPED -> {
-                Log.d(TAG, "handleMessage, data: $message")
+//                Log.d(TAG, "handleMessage, data: $message")
             }
         }
     }
