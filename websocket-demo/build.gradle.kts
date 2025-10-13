@@ -51,5 +51,5 @@ dependencies {
 
     implementation("com.alibaba:fastjson:2.0.28")
 
-    implementation("com.tencent.twetalk:twetalk-android:1.0.6-SNAPSHOT")
+    implementation("com.tencent.twetalk:twetalk-android:1.0.7-SNAPSHOT")
 }

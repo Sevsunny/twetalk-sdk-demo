@@ -42,13 +42,13 @@
     Groovy:
 
     ``` groovy
-    implementation 'com.tencent.twetalk:twetalk-android:1.0.4-SNAPSHOT'
+    implementation 'com.tencent.twetalk:twetalk-android:1.0.7-SNAPSHOT'
     ```
 
     Kotlin DSL:
 
     ``` kotlin
-    implementation("com.tencent.twetalk:twetalk-android:1.0.4-SNAPSHOT")
+    implementation("com.tencent.twetalk:twetalk-android:1.0.7-SNAPSHOT")
     ```
 
 2. 创建 TWeTalkClient

@@ -41,7 +41,7 @@ class MainActivity : AppCompatActivity() {
         val authConfig = TWeTalkConfig.AuthConfig(
             "<Your SecretId>",
             "<Your SecretKey>",
-            "<Your ProductId>", "<Your DeviceName>", "pcm")
+            "<Your ProductId>", "<Your DeviceName>", "pcm", "en")
 
         TWeTalkConfig.builder()
             .authConfig(authConfig)
