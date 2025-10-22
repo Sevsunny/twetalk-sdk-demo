@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginVertical="4dp"
+    android:clickable="true"
+    android:focusable="true"
+    app:cardCornerRadius="12dp"
+    app:cardElevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="16dp">
+
+        <!-- 连接类型图标 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="12dp"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <ImageView
+                android:id="@+id/ivConnectionType"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="@drawable/bg_connection_type"
+                android:contentDescription="连接类型"
+                android:padding="6dp"
+                android:src="@drawable/ic_websocket"
+                tools:src="@drawable/ic_websocket" />
+
+            <TextView
+                android:id="@+id/tvConnectionType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="WebSocket"
+                android:textColor="@color/gray_text"
+                android:textSize="10sp"
+                tools:text="WebSocket" />
+
+        </LinearLayout>
+
+        <!-- 会话信息 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- 标题和时间 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text="AI 对话会话"
+                    android:textColor="@color/gray_text"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    tools:text="AI 对话会话" />
+
+                <TextView
+                    android:id="@+id/tvTime"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="12:34"
+                    android:textColor="@color/gray_text"
+                    android:textSize="12sp"
+                    tools:text="12:34" />
+
+            </LinearLayout>
+
+            <!-- 最后一条消息 -->
+            <TextView
+                android:id="@+id/tvLastMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:text="最后一条对话消息内容..."
+                android:textColor="@color/gray_text"
+                android:textSize="14sp"
+                android:alpha="0.8"
+                tools:text="这是最后一条对话消息的内容，可能会比较长..." />
+
+            <!-- 会话统计信息 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <!-- 消息数量 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_message_count"
+                        android:contentDescription="消息数量" />
+
+                    <TextView
+                        android:id="@+id/tvMessageCount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="12条消息"
+                        android:textColor="@color/gray_text"
+                        android:textSize="12sp"
+                        tools:text="12条消息" />
+
+                </LinearLayout>
+
+                <!-- 持续时间 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_duration"
+                        android:contentDescription="持续时间" />
+
+                    <TextView
+                        android:id="@+id/tvDuration"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="5分30秒"
+                        android:textColor="@color/gray_text"
+                        android:textSize="12sp"
+                        tools:text="5分30秒" />
+
+                </LinearLayout>
+
+                <!-- 音频格式 -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chipAudioFormat"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Opus"
+                    android:textColor="@color/primary_blue"
+                    android:textSize="10sp"
+                    app:chipBackgroundColor="@color/primary_blue_light"
+                    app:chipMinHeight="24dp"
+                    tools:text="Opus" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_weight="1" />
+
+                <!-- 删除按钮 -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnDelete"
+                    style="@style/Widget.Material3.Button.IconButton"
+                    android:layout_width="32dp"
+                    android:layout_height="32dp"
+                    android:contentDescription="删除"
+                    app:icon="@drawable/ic_delete_small"
+                    app:iconSize="16dp"
+                    app:iconTint="@color/gray_text" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</com.google.android.material.card.MaterialCardView>

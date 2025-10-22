@@ -42,13 +42,13 @@
     Groovy:
 
     ``` groovy
-    implementation 'com.tencent.twetalk:twetalk-android:1.0.7-SNAPSHOT'
+    implementation 'com.tencent.twetalk:twetalk-android:1.1.1-SNAPSHOT'
     ```
 
     Kotlin DSL:
 
     ``` kotlin
-    implementation("com.tencent.twetalk:twetalk-android:1.0.7-SNAPSHOT")
+    implementation("com.tencent.twetalk:twetalk-android:1.1.1-SNAPSHOT")
     ```
 
 2. 创建 TWeTalkClient
@@ -218,13 +218,13 @@ public class AudioMessage {
     Groovy:
 
     ``` groovy
-    implementation 'com.tencent.twetalk:twetalk-android-trtc:1.0.0-SNAPSHOT'
+    implementation 'com.tencent.twetalk:twetalk-android-trtc:1.0.6-SNAPSHOT'
     ```
 
     Kotlin DSL:
 
     ``` kotlin
-    implementation("com.tencent.twetalk:twetalk-android-trtc:1.0.0-SNAPSHOT")
+    implementation("com.tencent.twetalk:twetalk-android-trtc:1.0.6-SNAPSHOT")
     ```
 
 2. 创建 TWeTalkTRTCClient
@@ -262,6 +262,10 @@ public class AudioMessage {
                 ......
             }
 
+            override fun onMetrics(metrics: MetricEvent?) {
+                // 监听 SDK 各项指标，默认不监听，如有需要可在创建 config 时打开
+            }
+
             override fun onError(errCode: Int, errMsg: String?) {
                 // 监听错误
                 // errCode 参考：https://cloud.tencent.com/document/product/647/38308#e9c6eb6577e24853dd9716de29044384
@@ -273,7 +277,7 @@ public class AudioMessage {
    1. 发送音频数据
 
         ``` Kotlin
-        // 默认发送
+        // 自采集默认发送，一般默认使用 TRTC 采集音频，如需自采集请在 config 关闭 TRTC 采集音频 useTRTCRecord 参数
         client?.sendAudioData(audioData)
 
         // 指定采样率和通道数
@@ -314,6 +318,32 @@ public class AudioFrame {
 ## Demo 使用指引
 
 注意，SecretKey 最好保存在自建服务中以免泄露，此处仅为演示。
+
+### TWeTalkDemo
+
+1. 用户编译前可选择根据实际需要情况调整 config.json 中的内容，config.json 位于 app 模块的根目录，config.json 内容如下：
+
+    ``` json
+    {
+      "productId": "",
+      "deviceName": "",
+
+      "websocket": {
+          "secretId": "请输入从物联网开发平台申请的 App key",
+          "secretKey": "请输入从物联网开发平台申请的 App Secret，App Secret 请保存在服务端，此处仅为演示，如有泄露概不负责"
+      },
+
+      "trtc": {
+          "sdkAppId": "",
+          "sdkSecretKey": "",
+          "userId": ""
+      }
+    }
+    ```
+
+   websocket 和 trtc 字段只填需要使用的一种即可。
+
+2. 用户也可直接打开 Demo 根据输入框提示需要的信息填写连接
 
 ### websocket-demo
 

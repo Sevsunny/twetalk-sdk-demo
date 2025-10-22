@@ -1,0 +1,15 @@
+{
+  "productId": "",
+  "deviceName": "",
+
+  "websocket": {
+    "secretId": "",
+    "secretKey": ""
+  },
+
+  "trtc": {
+    "sdkAppId": "",
+    "sdkSecretKey": "",
+    "userId": ""
+  }
+}

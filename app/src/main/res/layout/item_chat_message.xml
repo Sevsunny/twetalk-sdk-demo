@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingVertical="4dp">
+
+    <!-- 用户消息布局 -->
+    <LinearLayout
+        android:id="@+id/layoutUserMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:orientation="vertical">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="48dp"
+                app:cardBackgroundColor="@color/user_message_bg"
+                app:cardCornerRadius="18dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/tvUserMessage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxWidth="240dp"
+                        android:text="用户消息内容"
+                        android:textColor="@color/message_text"
+                        android:textSize="16sp"
+                        tools:text="这是用户发送的消息内容" />
+
+                    <TextView
+                        android:id="@+id/tvUserTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end"
+                        android:layout_marginTop="4dp"
+                        android:text="12:34"
+                        android:textColor="@color/gray_text"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/bg_avatar_user"
+            android:contentDescription="用户头像"
+            android:padding="6dp"
+            android:src="@drawable/ic_person" />
+
+    </LinearLayout>
+
+    <!-- AI消息布局 -->
+    <LinearLayout
+        android:id="@+id/layoutAiMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="start"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="bottom"
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/bg_avatar_ai"
+            android:contentDescription="AI头像"
+            android:padding="6dp"
+            android:src="@drawable/ic_ai" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="start"
+            android:orientation="vertical">
+
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="48dp"
+                app:cardBackgroundColor="@color/ai_message_bg"
+                app:cardCornerRadius="18dp"
+                app:cardElevation="2dp">
+
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="12dp">
+
+                    <TextView
+                        android:id="@+id/tvAiMessage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:maxWidth="240dp"
+                        android:text="AI回复内容"
+                        android:textColor="@color/message_text"
+                        android:textSize="16sp"
+                        tools:text="这是AI回复的消息内容" />
+
+                    <TextView
+                        android:id="@+id/tvAiTime"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="12:35"
+                        android:textColor="@color/gray_text"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- 系统消息布局 -->
+    <LinearLayout
+        android:id="@+id/layoutSystemMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/tvSystemMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_system_message"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="6dp"
+            android:text="系统消息"
+            android:textColor="@color/gray_text"
+            android:textSize="12sp"
+            tools:text="连接已建立" />
+
+    </LinearLayout>
+
+</LinearLayout>

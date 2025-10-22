@@ -53,9 +53,9 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
 
-    implementation("com.alibaba:fastjson:2.0.28")
-    implementation("com.tencent.twetalk:twetalk-android:1.0.4-SNAPSHOT")
-    implementation("com.tencent.twetalk:twetalk-android-trtc:1.0.0-SNAPSHOT")
+    implementation(libs.fastjson)
+    implementation(libs.twetalk.android)
+    implementation(libs.twetalk.android.trtc)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

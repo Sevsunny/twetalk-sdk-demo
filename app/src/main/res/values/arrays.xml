@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 语言选择数组 -->
+    <string-array name="language_options">
+        <item>中文</item>
+        <item>English</item>
+    </string-array>
+    
+    <string-array name="language_values">
+        <item>zh</item>
+        <item>en</item>
+    </string-array>
+</resources>

@@ -1,0 +1,38 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- AI 芯片图标 -->
+    <!-- 外框 -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M20,4H4C2.9,4 2,4.9 2,6v12c0,1.1 0.9,2 2,2h16c1.1,0 2,-0.9 2,-2V6C22,4.9 21.1,4 20,4zM20,18H4V6h16V18z"/>
+    <!-- 中心芯片 -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M12,8c-2.21,0 -4,1.79 -4,4s1.79,4 4,4s4,-1.79 4,-4S14.21,8 12,8zM12,14c-1.1,0 -2,-0.9 -2,-2s0.9,-2 2,-2s2,0.9 2,2S13.1,14 12,14z"/>
+    <!-- 左侧连接线 -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M2,10h2v4H2z"/>
+    <!-- 右侧连接线 -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M20,10h2v4h-2z"/>
+    <!-- 上方连接线 -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M10,2h4v2h-4z"/>
+    <!-- 下方连接线 -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M10,20h4v2h-4z"/>
+    <!-- AI 文字标识 (简化的点) -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M9,11h1v2H9z"/>
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M14,11h1v2h-1z"/>
+</vector>

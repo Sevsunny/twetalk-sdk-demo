@@ -1,3 +1,134 @@
 <resources>
-    <string name="app_name">twetalk-sdk-demo</string>
+    <string name="app_name">TWeTalkDemo</string>
+    
+    <!-- 主界面 -->
+    <string name="connection_method">连接方式</string>
+    <string name="websocket">WebSocket</string>
+    <string name="trtc">TRTC</string>
+    <string name="connection_config">连接配置</string>
+    <string name="connection_url">连接域名</string>
+    <string name="audio_format">音频格式</string>
+    <string name="opus">OPUS</string>
+    <string name="pcm">PCM</string>
+    <string name="connect">连接</string>
+    <string name="disconnect">断开连接</string>
+    <string name="settings">设置</string>
+    <string name="history">历史记录</string>
+    <string name="ai_config">AI 配置</string>
+    <string name="text_url">iot-twetalk.tencentiotcloud.com</string>
+    
+    <!-- 语言选择 -->
+    <string name="language_selection">语言选择</string>
+    <string name="chinese">中文</string>
+    <string name="english">English</string>
+    
+    <!-- 参数配置 -->
+    <string name="product_id">Product ID</string>
+    <string name="device_name">Device Name</string>
+    <string name="secret_id">Secret ID</string>
+    <string name="secret_key">Secret Key</string>
+    <string name="sdk_app_id">SDK App ID</string>
+    <string name="sdk_secret_key">SDK Secret Key</string>
+    <string name="user_id">User ID (选填)</string>
+    
+    <!-- 对话界面 -->
+    <string name="chat_title">AI 对话</string>
+    <string name="connection_status">连接状态</string>
+    <string name="connected">已连接</string>
+    <string name="disconnected">未连接</string>
+    <string name="hold_to_speak">按住说话</string>
+    <string name="release_to_send">松开发送</string>
+    <string name="listening">正在听...</string>
+    <string name="processing">处理中...</string>
+    <string name="you">你</string>
+    <string name="ai">AI</string>
+    
+    <!-- 设置界面 -->
+    <string name="settings_title">设置</string>
+    <string name="connection_params">连接参数</string>
+    <string name="audio_settings">音频设置</string>
+    <string name="clear_history">清除历史记录</string>
+    
+    <!-- 历史记录界面 -->
+    <string name="history_title">聊天记录</string>
+    <string name="no_history">暂无聊天记录</string>
+    <string name="search_hint">搜索聊天记录...</string>
+    
+    <!-- WS 连接状态 -->
+    <string name="connecting">正在连接中</string>
+    <string name="reconnecting">正在尝试重新连接</string>
+    <string name="closing">正在断开连接</string>
+    
+    <!-- TRTC 状态 -->
+    <string name="entering">正在进入房间</string>
+    <string name="leaving">正在离开房间</string>
+    <string name="waiting">正在等待对方</string>
+
+    <!-- 通用 -->
+    <string name="save">保存</string>
+    <string name="cancel">取消</string>
+    <string name="confirm">确认</string>
+    <string name="error">错误</string>
+    <string name="success">成功</string>
+    <string name="loading">加载中...</string>
+    <string name="required_field">必填字段</string>
+    
+    <!-- AI 配置界面 -->
+    <string name="ai_config_title">TWeTalk 配置</string>
+    <string name="basic_config">基础配置</string>
+    <string name="stt_config">STT 配置</string>
+    <string name="llm_config">LLM 配置</string>
+    <string name="tts_config">TTS 配置</string>
+    <string name="conversation_config">会话配置</string>
+    
+    <!-- 基础配置 -->
+    <string name="system_prompt">系统提示词</string>
+    <string name="greeting_message">欢迎语</string>
+    <string name="default_voice_type">默认音色</string>
+    <string name="config_name">配置名称</string>
+    
+    <!-- STT 配置 -->
+    <string name="stt_type">STT 类型</string>
+    <string name="stt_enabled">启用自定义 STT</string>
+    <string name="stt_config_json">STT 配置 JSON</string>
+    
+    <!-- LLM 配置 -->
+    <string name="llm_type">LLM 类型</string>
+    <string name="llm_enabled">启用自定义 LLM</string>
+    <string name="llm_model">模型</string>
+    <string name="llm_streaming">流式输出</string>
+    <string name="llm_config_json">LLM 配置 JSON</string>
+    <string name="temperature">温度</string>
+    <string name="max_tokens">最大 Token 数</string>
+    <string name="top_p">Top P</string>
+    
+    <!-- TTS 配置 -->
+    <string name="tts_type">TTS 类型</string>
+    <string name="tts_enabled">启用自定义 TTS</string>
+    <string name="tts_config_json">TTS 配置 JSON</string>
+    <string name="speed">语速</string>
+    <string name="volume">音量</string>
+    <string name="pitch">音调</string>
+    
+    <!-- 会话配置 -->
+    <string name="conversation_config_enabled">启用会话配置参数</string>
+    <string name="session_timeout">会话超时（秒）</string>
+    <string name="interruption_enabled">允许打断</string>
+    <string name="max_context_tokens">最大上下文 Token</string>
+    <string name="emotion_enabled">启用情绪识别</string>
+    <string name="semantic_vad_enabled">启用语义 VAD</string>
+    <string name="noise_filter_enabled">启用噪声过滤</string>
+    
+    <!-- 空闲检测 -->
+    <string name="idle_detection">空闲检测</string>
+    <string name="idle_enabled">启用自定义空闲检测</string>
+    <string name="idle_timeout">空闲超时（秒）</string>
+    <string name="idle_max_retries">最大重试次数</string>
+    
+    <!-- 提示信息 -->
+    <string name="config_saved">配置已保存</string>
+    <string name="config_load_failed">配置加载失败</string>
+    <string name="invalid_json">无效的 JSON 格式</string>
+    <string name="expand">展开</string>
+    <string name="collapse">收起</string>
 </resources>

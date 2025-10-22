@@ -49,7 +49,7 @@ dependencies {
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
 
-    implementation("com.alibaba:fastjson:2.0.28")
+    implementation(libs.fastjson)
 
-    implementation("com.tencent.twetalk:twetalk-android:1.0.7-SNAPSHOT")
+    implementation(libs.twetalk.android)
 }
