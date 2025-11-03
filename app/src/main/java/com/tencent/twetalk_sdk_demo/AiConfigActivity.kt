@@ -9,6 +9,7 @@ import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.alibaba.fastjson2.JSON
@@ -24,6 +25,9 @@ import com.tencent.twetalk.config.TalkTTSConfigInfo
 import com.tencent.twetalk.util.AuthUtil
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.databinding.ActivityAiConfigBinding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * AI 配置页面
@@ -367,22 +371,33 @@ class AiConfigActivity : AppCompatActivity() {
             return
         }
 
-        try {
-            val config = buildTalkConfig()
-            val configJson = config.toJsonString()
-            Log.d(TAG, "saveConfig: $configJson")
-            doSaveRequest(configJson)
+        lifecycleScope.launch {
+            try {
+                val config = buildTalkConfig()
+                val configJson = config.toJsonString()
+                Log.d(TAG, "saveConfig: $configJson")
 
-            // 保存到 SharedPreferences
-            sharedPreferences.edit()
-                .putString(KEY_CONFIG_JSON, configJson)
-                .apply()
+                withContext(Dispatchers.IO) {
+                    doSaveRequest(configJson)
+                }
 
-            Toast.makeText(this, R.string.config_saved, Toast.LENGTH_SHORT).show()
-            finish()
-        } catch (e: Exception) {
-            Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
-            Log.e(TAG, "saveConfig, error", e)
+                // 保存到 SharedPreferences
+                sharedPreferences.edit()
+                    .putString(KEY_CONFIG_JSON, configJson)
+                    .apply()
+
+                Toast.makeText(this@AiConfigActivity, R.string.config_saved, Toast.LENGTH_SHORT).show()
+                finish()
+            } catch (e: Exception) {
+                val errorMsg = when {
+                    e.message != null -> e.message
+                    e.cause?.message != null -> e.cause?.message
+                    else -> "${e.javaClass.simpleName}: 未知错误"
+                }
+
+                Toast.makeText(this@AiConfigActivity, "保存失败: $errorMsg", Toast.LENGTH_SHORT).show()
+                Log.e(TAG, "saveConfig, error", e)
+            }
         }
     }
 

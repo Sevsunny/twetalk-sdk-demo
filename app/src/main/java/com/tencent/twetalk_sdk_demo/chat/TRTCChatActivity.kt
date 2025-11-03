@@ -130,7 +130,7 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
 
         // 密钥信息
         securePrefs.edit {
-            putInt(Constants.KEY_SDK_APP_ID, config.sdkAppId)
+            putString(Constants.KEY_SDK_APP_ID, config.sdkAppId.toString())
             putString(Constants.KEY_SDK_SECRET_KEY, config.sdkSecretKey)
         }
     }
