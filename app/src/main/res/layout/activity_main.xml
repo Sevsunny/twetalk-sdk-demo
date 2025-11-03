@@ -32,7 +32,7 @@
                 android:layout_width="48dp"
                 android:layout_height="48dp"
                 android:contentDescription="@string/ai_config"
-                app:icon="@drawable/ic_ai_config"
+                app:icon="@drawable/ic_settings"
                 app:iconTint="@color/white" />
 
             <com.google.android.material.button.MaterialButton

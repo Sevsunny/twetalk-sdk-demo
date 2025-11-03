@@ -7,51 +7,87 @@ import android.view.View
 import android.widget.AdapterView
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.google.android.material.card.MaterialCardView
 import com.tencent.twetalk.core.TWeTalkConfig
 import com.tencent.twetalk_sdk_demo.chat.TRTCChatActivity
 import com.tencent.twetalk_sdk_demo.chat.WebSocketChatActivity
+import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.databinding.ActivityMainBinding
 
 class MainActivity : BaseActivity<ActivityMainBinding>() {
     private var selectedLanguage = "zh"
     private var connectionType = TWeTalkConfig.TransportType.WEBSOCKET
-    private var sharedPreferences: SharedPreferences? = null
 
     override fun getViewBinding() = ActivityMainBinding.inflate(layoutInflater)
 
     override fun initView() {
-        if (SettingsActivity.isAutoSaveEnabled(this)) {
-            sharedPreferences = getSharedPreferences("connection_info", MODE_PRIVATE)
-        }
-
-        loadDefaultConfig()
         setupToolbar()
         setupLanguageSelection()
         setupConnectionTypeSelection()
         setupConnectButton()
         setupNavigationButtons()
-
-        // 默认选择中文和WebSocket
-        selectConnectionType(TWeTalkConfig.TransportType.WEBSOCKET)
+        loadDefaultConfig()
     }
 
     private fun loadDefaultConfig() {
         with(binding) {
-            etProductId.setText(sharedPreferences?.getString("productId", null)
-                ?: BuildConfig.productId)
-            etDeviceName.setText(sharedPreferences?.getString("deviceName", null)
-                ?: BuildConfig.deviceName)
-            etSecretId.setText(sharedPreferences?.getString("secretId", null)
-                ?: BuildConfig.secretId)
-            etSecretKey.setText(sharedPreferences?.getString("secretKey", null)
-                ?: BuildConfig.secretKey)
-            etSdkAppId.setText(sharedPreferences?.getString("sdkAppId", null)
-                ?: BuildConfig.sdkAppId)
-            etSdkSecretKey.setText(sharedPreferences?.getString("sdkSecretKey", null)
-                ?: BuildConfig.sdkSecretKey)
-            etUserId.setText(sharedPreferences?.getString("userId", null)
-                ?: BuildConfig.userId)
+            getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).run {
+                val connectionTypeStr = this.getString(Constants.KEY_CONNECTION_TYPE, "WEBSOCKET")
+
+                if (connectionTypeStr == "TRTC") {
+                    selectConnectionType(TWeTalkConfig.TransportType.TRTC)
+                } else {
+                    selectConnectionType(TWeTalkConfig.TransportType.WEBSOCKET)
+                }
+
+                // WebSocket 其它参数反向渲染
+                val audioType = this.getString(Constants.KEY_AUDIO_TYPE, "PCM")
+
+                if (audioType == "OPUS") {
+                    rbOpus.isChecked = true
+                    rbPCM.isChecked = false
+                } else {
+                    rbOpus.isChecked = false
+                    rbPCM.isChecked = true
+                }
+
+                // TRTC 其它参数反向渲染
+                etUserId.setText(this.getString(Constants.KEY_USER_ID, null) ?: BuildConfig.userId)
+
+                val language = this.getString(Constants.KEY_LANGUAGE, "zh")
+
+                if (language == "en") {
+                    spinnerLanguage.setSelection(1)
+                } else {
+                    spinnerLanguage.setSelection(0)
+                }
+            }
+
+            // 设备信息反向渲染
+            getSharedPreferences(Constants.KEY_DEVICE_INFO_PREF, MODE_PRIVATE).run {
+                etProductId.setText(this.getString(Constants.KEY_PRODUCT_ID, null) ?: BuildConfig.productId)
+                etDeviceName.setText(this.getString(Constants.KEY_DEVICE_NAME, null) ?: BuildConfig.deviceName)
+            }
+
+            // 密钥信息反向渲染
+            val masterKey = MasterKey.Builder(this@MainActivity)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+
+            EncryptedSharedPreferences.create(
+                this@MainActivity,
+                Constants.KEY_SECRET_INFO_PREF,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            ).run {
+                etSecretId.setText(this.getString(Constants.KEY_SECRET_ID, null) ?: BuildConfig.secretId)
+                etSecretKey.setText(this.getString(Constants.KEY_SECRET_KEY, null) ?: BuildConfig.secretKey)
+                etSdkAppId.setText(this.getString(Constants.KEY_SDK_APP_ID, null) ?: BuildConfig.sdkAppId)
+                etSdkSecretKey.setText(this.getString(Constants.KEY_SDK_SECRET_KEY, null) ?: BuildConfig.sdkSecretKey)
+            }
         }
     }
 
@@ -73,9 +109,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 selectedLanguage = languageValues[0]
             }
         }
-        
-        // 设置默认选择
-        binding.spinnerLanguage.setSelection(0)
     }
 
     private fun setupConnectionTypeSelection() {
@@ -151,42 +184,43 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
         // 跳转到聊天界面
         val bundle = Bundle().apply {
-            putString(KEY_CONNECTION_TYPE, connectionType.name)
-            putString(KEY_AUDIO_TYPE, getSelectedAudioType())
-            putString(KEY_LANGUAGE, selectedLanguage)
-            putString(KEY_PRODUCT_ID, binding.etProductId.text.toString())
-            putString(KEY_DEVICE_NAME, binding.etDeviceName.text.toString())
+            putString(Constants.KEY_CONNECTION_TYPE, connectionType.name)
+            putString(Constants.KEY_AUDIO_TYPE, getSelectedAudioType())
+            putString(Constants.KEY_PRODUCT_ID, binding.etProductId.text.toString())
+            putString(Constants.KEY_DEVICE_NAME, binding.etDeviceName.text.toString())
+            putString(Constants.KEY_LANGUAGE, selectedLanguage)
         }
 
         val intent = when (connectionType) {
             TWeTalkConfig.TransportType.WEBSOCKET -> {
-                bundle.putString(KEY_SECRET_ID, binding.etSecretId.text.toString())
-                bundle.putString(KEY_SECRET_KEY, binding.etSecretKey.text.toString())
+                bundle.putString(Constants.KEY_SECRET_ID, binding.etSecretId.text.toString())
+                bundle.putString(Constants.KEY_SECRET_KEY, binding.etSecretKey.text.toString())
 
                 Intent(this@MainActivity, WebSocketChatActivity::class.java)
-                    .putExtra(KEY_BUNDLE_NAME, bundle)
+                    .putExtra(Constants.KEY_CHAT_BUNDLE, bundle)
             }
 
             TWeTalkConfig.TransportType.TRTC -> {
-                bundle.putString(KEY_SDK_APP_ID, binding.etSdkAppId.text.toString())
-                bundle.putInt(KEY_SDK_APP_ID, binding.etSdkAppId.text.toString().trim().toIntOrNull() ?: 0)
-                bundle.putString(KEY_SDK_SECRET_KEY, binding.etSdkSecretKey.text.toString())
+                bundle.putString(Constants.KEY_SDK_APP_ID, binding.etSdkAppId.text.toString())
+                bundle.putInt(Constants.KEY_SDK_APP_ID, binding.etSdkAppId.text.toString().trim().toIntOrNull() ?: 0)
+                bundle.putString(Constants.KEY_SDK_SECRET_KEY, binding.etSdkSecretKey.text.toString())
 
                 // userId 选填，如果没有则不传，默认会取 productId_deviceName
                 if (!binding.etUserId.text.isNullOrBlank()) {
-                    bundle.putString(KEY_USER_ID, binding.etUserId.text.toString())
+                    bundle.putString(Constants.KEY_USER_ID, binding.etUserId.text.toString())
                 }
 
                 Intent(this@MainActivity, TRTCChatActivity::class.java)
-                    .putExtra(KEY_BUNDLE_NAME, bundle)
+                    .putExtra(Constants.KEY_CHAT_BUNDLE, bundle)
             }
         }
 
-        startActivity(intent)
-
-        sharedPreferences?.edit {
-
+        // 保存上次连接的方式
+        getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).edit {
+            putString(Constants.KEY_CONNECTION_TYPE, connectionType.name)
         }
+
+        startActivity(intent)
     }
 
     private fun validateInputs(): Boolean {
@@ -258,17 +292,5 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
     companion object {
         private val TAG = MainActivity::class.simpleName
-
-        const val KEY_BUNDLE_NAME = "connection_config"
-        const val KEY_CONNECTION_TYPE = "connection_type"
-        const val KEY_AUDIO_TYPE = "audio_type"
-        const val KEY_LANGUAGE = "language"
-        const val KEY_PRODUCT_ID = "product_id"
-        const val KEY_DEVICE_NAME = "device_name"
-        const val KEY_SECRET_ID = "secret_id"
-        const val KEY_SECRET_KEY = "secret_key"
-        const val KEY_SDK_APP_ID = "sdk_app_id"
-        const val KEY_SDK_SECRET_KEY = "sdk_secret_key"
-        const val KEY_USER_ID = "user_id"
     }
 }

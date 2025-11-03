@@ -1,10 +1,11 @@
 package com.tencent.twetalk_sdk_demo.chat
 
 import android.util.Log
+import androidx.core.content.edit
 import com.tencent.twetalk.metrics.MetricEvent
 import com.tencent.twetalk.protocol.TWeTalkMessage
-import com.tencent.twetalk_sdk_demo.MainActivity
 import com.tencent.twetalk_sdk_demo.R
+import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_trtc.config.TRTCConfig
 import com.tencent.twetalk_sdk_trtc.core.DefaultTRTCClient
 import com.tencent.twetalk_sdk_trtc.core.TRTCClientListener
@@ -20,19 +21,19 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
     private lateinit var config: TRTCConfig
 
     override fun initClient() {
-        val bundle = intent.getBundleExtra(MainActivity.Companion.KEY_BUNDLE_NAME)
+        val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
 
         if (bundle == null) {
             toast("没有读取到连接配置")
             finish()
         }
 
-        val sdkAppId = bundle?.getInt(MainActivity.KEY_SDK_APP_ID, 0)
-        val sdkSecretKey = bundle?.getString(MainActivity.KEY_SDK_SECRET_KEY, "")
-        val userId = bundle?.getString(MainActivity.KEY_USER_ID, "")
-        val productId = bundle?.getString(MainActivity.Companion.KEY_PRODUCT_ID, "")
-        val deviceName = bundle?.getString(MainActivity.Companion.KEY_DEVICE_NAME, "")
-        val language = bundle?.getString(MainActivity.Companion.KEY_LANGUAGE, "zh")
+        val sdkAppId = bundle?.getInt(Constants.KEY_SDK_APP_ID, 0)
+        val sdkSecretKey = bundle?.getString(Constants.KEY_SDK_SECRET_KEY, "")
+        val userId = bundle?.getString(Constants.KEY_USER_ID, "")
+        val productId = bundle?.getString(Constants.KEY_PRODUCT_ID, "")
+        val deviceName = bundle?.getString(Constants.KEY_DEVICE_NAME, "")
+        val language = bundle?.getString(Constants.KEY_LANGUAGE, "zh")
 
         config = TRTCConfig.Builder()
             .sdkAppId(sdkAppId!!)
@@ -87,6 +88,7 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
                 isConnected = true
                 updateConnectState()
                 ConversationManager.onSystemMessage("对方已进入房间，开始对话")
+                saveConfig()
             }
 
             null -> Log.e(TAG, "onStateChanged, unexpected state")
@@ -111,5 +113,25 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
     override fun onDestroy() {
         super.onDestroy()
         client.destroy()
+    }
+
+    private fun saveConfig() {
+        // 绑定的设备信息
+        getSharedPreferences(Constants.KEY_DEVICE_INFO_PREF, MODE_PRIVATE).edit {
+            putString(Constants.KEY_PRODUCT_ID, config.productId)
+            putString(Constants.KEY_DEVICE_NAME, config.deviceName)
+        }
+
+        // 其它连接参数信息
+        getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).edit {
+            putString(Constants.KEY_USER_ID, config.userId)
+            putString(Constants.KEY_LANGUAGE, config.language)
+        }
+
+        // 密钥信息
+        securePrefs.edit {
+            putInt(Constants.KEY_SDK_APP_ID, config.sdkAppId)
+            putString(Constants.KEY_SDK_SECRET_KEY, config.sdkSecretKey)
+        }
     }
 }

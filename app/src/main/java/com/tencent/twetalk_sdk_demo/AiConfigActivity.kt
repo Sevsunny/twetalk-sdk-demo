@@ -9,6 +9,8 @@ import android.view.View
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.alibaba.fastjson2.JSON
 import com.google.android.material.textfield.TextInputEditText
 import com.tencent.twetalk.config.IdleResponseInfo
@@ -20,6 +22,7 @@ import com.tencent.twetalk.config.TalkLLMConfigInfo
 import com.tencent.twetalk.config.TalkSTTConfigInfo
 import com.tencent.twetalk.config.TalkTTSConfigInfo
 import com.tencent.twetalk.util.AuthUtil
+import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.databinding.ActivityAiConfigBinding
 
 /**
@@ -183,20 +186,35 @@ class AiConfigActivity : AppCompatActivity() {
      */
     private fun loadConfig() {
         val configJson = sharedPreferences.getString(KEY_CONFIG_JSON, null)
+
         if (configJson != null) {
             try {
                 parseAndFillConfig(configJson)
             } catch (e: Exception) {
                 Toast.makeText(this, R.string.config_load_failed, Toast.LENGTH_SHORT).show()
             }
-        } else {
-            // 密钥信息
-            binding.etSecretId.setText(BuildConfig.secretId)
-            binding.etSecretKey.setText(BuildConfig.secretKey)
+        }
 
-            // 基础信息
-            binding.etProductId.setText(BuildConfig.productId)
-            binding.etDeviceName.setText(BuildConfig.deviceName)
+        // 设备信息反向渲染
+        getSharedPreferences(Constants.KEY_DEVICE_INFO_PREF, MODE_PRIVATE).run {
+            binding.etProductId.setText(this.getString(Constants.KEY_PRODUCT_ID, null) ?: BuildConfig.productId)
+            binding.etDeviceName.setText(this.getString(Constants.KEY_DEVICE_NAME, null) ?: BuildConfig.deviceName)
+        }
+
+        // 密钥信息反向渲染
+        val masterKey = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        EncryptedSharedPreferences.create(
+            this,
+            Constants.KEY_SECRET_INFO_PREF,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        ).run {
+            binding.etSecretId.setText(this.getString(Constants.KEY_SECRET_ID, null) ?: BuildConfig.secretId)
+            binding.etSecretKey.setText(this.getString(Constants.KEY_SECRET_KEY, null) ?: BuildConfig.secretKey)
         }
     }
 
@@ -364,6 +382,7 @@ class AiConfigActivity : AppCompatActivity() {
             finish()
         } catch (e: Exception) {
             Toast.makeText(this, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            Log.e(TAG, "saveConfig, error", e)
         }
     }
 

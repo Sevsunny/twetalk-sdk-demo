@@ -86,4 +86,7 @@ dependencies {
 
     // json lib
     implementation(libs.fastjson)
+
+    // encrypt
+    implementation(libs.androidx.security.crypto)
 }

@@ -2,6 +2,7 @@ package com.tencent.twetalk_sdk_demo.chat
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
@@ -21,11 +22,12 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import com.alibaba.fastjson2.JSON
 import com.alibaba.fastjson2.JSONException
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.BaseActivity
-import com.tencent.twetalk_sdk_demo.MainActivity
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.SettingsActivity
 import com.tencent.twetalk_sdk_demo.adapter.ChatMessageAdapter
@@ -33,6 +35,7 @@ import com.tencent.twetalk_sdk_demo.audio.AudioConfig
 import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
 import com.tencent.twetalk_sdk_demo.audio.MicRecorder
 import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
+import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.data.MessageStatus
 import com.tencent.twetalk_sdk_demo.databinding.ActivityChatBinding
 import kotlinx.coroutines.launch
@@ -50,6 +53,21 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private var audioFormat: String = ""
     protected var isConnected = false
     protected val player = RemotePlayer()
+
+    protected val securePrefs: SharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(this)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        EncryptedSharedPreferences.create(
+            this,
+            Constants.KEY_SECRET_INFO_PREF,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
     private var micRecorder: MicRecorder? = null
 
     protected val reqPermission = registerForActivityResult(
@@ -206,10 +224,10 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
     private fun setupConnectionInfo() {
         // 获取连接参数
-        val bundle = intent.getBundleExtra(MainActivity.Companion.KEY_BUNDLE_NAME)
+        val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
 
         bundle?.run {
-            connectionType = bundle.getString(MainActivity.Companion.KEY_CONNECTION_TYPE, "WEBSOCKET")
+            connectionType = bundle.getString(Constants.KEY_CONNECTION_TYPE, "WEBSOCKET")
 
             // TODO 启动 TRTC 采集功能后再显示这个 chip
             if (connectionType == "TRTC") {
@@ -217,7 +235,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             }
 
             audioFormat = bundle.getString(
-                MainActivity.Companion.KEY_AUDIO_TYPE,
+                Constants.KEY_AUDIO_TYPE,
                 if (SettingsActivity.Companion.isTRTCRecord(this@BaseChatActivity)) {
                     "TRTC 采集"
                 } else {
