@@ -433,6 +433,8 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STOPPED -> {
 //                Log.d(TAG, "handleMessage, data: $message")
             }
+
+            TWeTalkMessage.TWeTalkMessageType.SERVER_MESSAGE -> TODO()
         }
     }
 

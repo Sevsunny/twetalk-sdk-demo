@@ -67,7 +67,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         client.sendCustomAudioData(audioData, sampleRate, channels)
     }
 
-    override fun onStateChanged(state: ConnectionState?) {
+    override fun onStateChanged(state: ConnectionState) {
 //        Log.d(TAG, "onStateChanged: $state")
 
         when (state) {
@@ -99,7 +99,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         }
     }
 
-    override fun onRecvMessage(message: TWeTalkMessage?) {
+    override fun onRecvMessage(message: TWeTalkMessage) {
         handleMessage(message!!)
     }
 
