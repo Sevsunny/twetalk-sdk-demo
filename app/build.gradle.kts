@@ -1,3 +1,4 @@
+import com.android.build.gradle.internal.api.BaseVariantOutputImpl
 import groovy.json.JsonSlurper
 
 plugins {
@@ -14,7 +15,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -63,6 +64,24 @@ android {
         viewBinding = true
         buildConfig = true
     }
+
+    applicationVariants.all {
+        val variant = this@all
+
+        outputs.all {
+            val output = this as BaseVariantOutputImpl
+            val appName = "TWeTalkDemo"
+            val versionName = variant.versionName
+            val buildType = variant.buildType.name
+            val flavorName = variant.flavorName
+
+            output.outputFileName = if (flavorName.isNotEmpty()) {
+                "${appName}-${flavorName}-v${versionName}-${buildType}.apk"
+            } else {
+                "${appName}-v${versionName}-${buildType}.apk"
+            }
+        }
+    }
 }
 
 dependencies {
@@ -89,4 +108,10 @@ dependencies {
 
     // encrypt
     implementation(libs.androidx.security.crypto)
+
+    // CameraX 核心库
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 }

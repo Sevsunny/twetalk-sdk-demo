@@ -7,7 +7,9 @@ import com.tencent.twetalk.core.DefaultTWeTalkClient
 import com.tencent.twetalk.core.TWeTalkClient
 import com.tencent.twetalk.core.TWeTalkClientListener
 import com.tencent.twetalk.core.TWeTalkConfig
+import com.tencent.twetalk.core.TokenProvider
 import com.tencent.twetalk.metrics.MetricEvent
+import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.data.Constants
@@ -35,15 +37,27 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         val audioType = bundle?.getString(Constants.KEY_AUDIO_TYPE, "PCM")
         val language = bundle?.getString(Constants.KEY_LANGUAGE, "zh")
 
+        val tokenProvider = object : TokenProvider {
+            override fun getToken(): String? {
+                return "xxx"
+            }
+
+            override fun refreshToken(oldToken: String?): String? {
+                return token
+            }
+        }
+
         val authConfig = TWeTalkConfig.AuthConfig(
             secretId,
             secretKey,
             productId,
             deviceName,
+            tokenProvider,
             audioType,
             language
         ).apply {
-            baseUrl = "ws://iot-twetalk-webrtc-test.tencentiotcloud.com/ws"
+//            baseUrl = "ws://iot-twetalk-webrtc-test.tencentiotcloud.com/ws"
+            baseUrl = "ws://43.144.101.48:7860/ws_vl"
         }
 
         config = TWeTalkConfig.builder()
@@ -67,6 +81,10 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         client.sendCustomAudioData(audioData, sampleRate, channels)
     }
 
+    override fun onImageCaptured(imgMsg: ImageMessage) {
+        client.sendImage(imgMsg)
+    }
+
     override fun onStateChanged(state: ConnectionState) {
 //        Log.d(TAG, "onStateChanged: $state")
 
@@ -79,8 +97,15 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                 isConnected = true
                 updateConnectState()
 
-                // 添加欢迎消息
-                ConversationManager.onSystemMessage("连接已建立，开始对话")
+                if (isVideoMode) {
+                    startRecording()
+                    cameraManager?.startCamera()
+                }
+
+                if (!isVideoMode) {
+                    // 添加欢迎消息
+                    ConversationManager.onSystemMessage("连接已建立，开始对话")
+                }
 
                 // 保存参数
                 saveConfig()
@@ -94,13 +119,11 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                 updateConnectState()
                 finish()
             }
-
-            null -> Log.e(TAG, "onStateChanged, unexpected state")
         }
     }
 
     override fun onRecvMessage(message: TWeTalkMessage) {
-        handleMessage(message!!)
+        handleMessage(message)
     }
 
     override fun onMetrics(metrics: MetricEvent?) {
@@ -130,6 +153,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).edit {
             putString(Constants.KEY_AUDIO_TYPE, config.authConfig.audioType)
             putString(Constants.KEY_LANGUAGE, config.authConfig.language)
+            putBoolean(Constants.KEY_VIDEO_MODE, isVideoMode)
         }
 
         // 密钥

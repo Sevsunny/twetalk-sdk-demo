@@ -8,6 +8,7 @@
     <string name="connection_config">连接配置</string>
     <string name="connection_url">连接域名</string>
     <string name="audio_format">音频格式</string>
+    <string name="video_chat">视频聊天</string>
     <string name="opus">OPUS</string>
     <string name="pcm">PCM</string>
     <string name="connect">连接</string>
@@ -15,8 +16,7 @@
     <string name="settings">设置</string>
     <string name="history">历史记录</string>
     <string name="ai_config">AI 配置</string>
-    <string name="text_url">iot-twetalk.tencentiotcloud.com</string>
-    
+
     <!-- 语言选择 -->
     <string name="language_selection">语言选择</string>
     <string name="chinese">中文</string>

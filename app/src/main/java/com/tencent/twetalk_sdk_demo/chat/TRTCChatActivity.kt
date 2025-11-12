@@ -3,6 +3,7 @@ package com.tencent.twetalk_sdk_demo.chat
 import android.util.Log
 import androidx.core.content.edit
 import com.tencent.twetalk.metrics.MetricEvent
+import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.data.Constants
@@ -66,6 +67,10 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
         if (!config.useTRTCRecord) {
             client.sendCustomAudioData(audioData, sampleRate, channels)
         }
+    }
+
+    override fun onImageCaptured(imgMsg: ImageMessage) {
+        throw UnsupportedOperationException("TRTC does not support sending image.")
     }
 
     override fun onStateChanged(state: TRTCClientState?) {

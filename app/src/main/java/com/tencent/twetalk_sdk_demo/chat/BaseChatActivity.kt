@@ -3,7 +3,6 @@ package com.tencent.twetalk_sdk_demo.chat
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -26,6 +25,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.alibaba.fastjson2.JSON
 import com.alibaba.fastjson2.JSONException
+import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
@@ -35,9 +35,12 @@ import com.tencent.twetalk_sdk_demo.audio.AudioConfig
 import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
 import com.tencent.twetalk_sdk_demo.audio.MicRecorder
 import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
+import com.tencent.twetalk_sdk_demo.data.ChatMessage
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.data.MessageStatus
 import com.tencent.twetalk_sdk_demo.databinding.ActivityChatBinding
+import com.tencent.twetalk_sdk_demo.utils.PermissionHelper
+import com.tencent.twetalk_sdk_demo.video.VideoChatCameraManager
 import kotlinx.coroutines.launch
 
 abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
@@ -53,6 +56,8 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private var audioFormat: String = ""
     protected var isConnected = false
     protected val player = RemotePlayer()
+    protected var isVideoMode = false
+    protected var cameraManager: VideoChatCameraManager? = null
 
     protected val securePrefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(this)
@@ -70,87 +75,132 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
     private var micRecorder: MicRecorder? = null
 
-    protected val reqPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) {
-            startChat()
-            initMicRecorder()
-        } else {
-            toast("麦克风权限被拒绝")
-            finish()
+    protected val reqPermissions = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
+
+        when {
+            isVideoMode -> {
+                if ((audioGranted && cameraGranted) || PermissionHelper.hasPermissions(this,
+                        PermissionHelper.VIDEO_MODE_PERMISSIONS)) {
+                    startChat()
+                    initMicRecorder()
+                } else {
+                    val deniedPermissions = mutableListOf<String>()
+                    if (!audioGranted) deniedPermissions.add("麦克风")
+                    if (!cameraGranted) deniedPermissions.add("摄像头")
+
+                    toast("${deniedPermissions.joinToString("、")}权限被拒绝")
+                    finish()
+                }
+            }
+
+            else -> {
+                if (audioGranted) {
+                    startChat()
+                    initMicRecorder()
+                } else {
+                    toast("麦克风权限被拒绝")
+                    finish()
+                }
+            }
         }
     }
 
     override fun getViewBinding() = ActivityChatBinding.inflate(layoutInflater)
 
     override fun initView() {
+        isVideoMode = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
+            ?.getBoolean(Constants.KEY_VIDEO_MODE) ?: false
+
+        loadConnectionInfo()
+
+        if (isVideoMode) {
+            showVideoUI()
+            setupVideoUI()
+        } else {
+            showAudioUI()
+            setupAudioUI()
+        }
+    }
+
+    private fun setupAudioUI() {
         setupToolbar()
-        setupRecyclerView()
-        setupConnectionInfo()
+        setupAudioConnectionInfo()
+        setupAudioRecyclerView()
         setupAudioControls()
+    }
+
+    private fun setupVideoUI() {
+        setupVideoRecyclerView()
+        updateConnectState()
+
+        cameraManager = VideoChatCameraManager(
+            this,
+            binding.videoChat.previewView
+        ) { imgMsg ->
+            onImageCaptured(imgMsg)
+        }
+
+        binding.videoChat.fabEndCall.setOnClickListener {
+            stopRecording()
+            stopChat()
+        }
+
+        binding.videoChat.fabSwitchCamera.setOnClickListener {
+            cameraManager?.switchCamera()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         initClient()
-        ensureMicPermissionAndStart()
-
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                launch {
-                    ConversationManager.messages.collect { messageList ->
-                        val lastPosition = messageList.size - 1
-
-                        messageAdapter.submitList(messageList) {
-                            if (lastPosition >= 0) {
-                                val lastMessage = messageList[lastPosition]
-
-                                // bot 消息流式输出时在开始输出和结束输出时滑动
-                                if ((lastMessage.status != MessageStatus.STREAMING) || (lastMessage.content == "")) {
-                                    binding.recyclerViewMessages.smoothScrollToPosition(lastPosition)
-                                }
-                            }
-                        }
-                    }
-                }
-
-                launch {
-                    ConversationManager.assistantTyping.collect { isTyping ->
-                        Log.d(TAG, "collect typing: $isTyping")
-                        if (isTyping) {
-                            binding.tvAudioStatus.text = getString(R.string.processing)
-                            binding.audioVisualizerContainer.visibility = View.VISIBLE
-                        } else {
-                            binding.audioVisualizerContainer.visibility = View.GONE
-                        }
-                    }
-                }
-            }
-        }
+        ensurePermissionsAndStart()
+        bindCollector()
     }
 
     abstract fun initClient()
     abstract fun startChat()
     abstract fun stopChat()
     abstract fun onAudioData(audioData: ByteArray, sampleRate: Int, channels: Int)
+    abstract fun onImageCaptured(imgMsg: ImageMessage)
 
     protected fun updateConnectState() {
         // 更新状态显示
         lifecycleScope.launch {
-            with(binding) {
-                if (isConnected) {
-                    chipConnectionStatus.text = getString(R.string.connected)
-                    chipConnectionStatus.chipIcon =
-                        AppCompatResources.getDrawable(this@BaseChatActivity, R.drawable.ic_connected)
-                    chipConnectionStatus.chipBackgroundColor =
-                        ContextCompat.getColorStateList(this@BaseChatActivity, R.color.success_green)
-                } else {
-                    chipConnectionStatus.text = getString(R.string.disconnected)
-                    chipConnectionStatus.chipIcon =
-                        AppCompatResources.getDrawable(this@BaseChatActivity, R.drawable.ic_disconnected)
-                    chipConnectionStatus.chipBackgroundColor =
-                        ContextCompat.getColorStateList(this@BaseChatActivity, R.color.error_red)
+            if (isVideoMode) {
+                with(binding.videoChat) {
+                    if (isConnected) {
+                        chipConnectionStatus.text = getString(R.string.connected)
+                        chipConnectionStatus.chipIcon =
+                            AppCompatResources.getDrawable(this@BaseChatActivity, R.drawable.ic_connected)
+                        chipConnectionStatus.chipBackgroundColor =
+                            ContextCompat.getColorStateList(this@BaseChatActivity, R.color.success_green)
+                    } else {
+                        chipConnectionStatus.text = getString(R.string.disconnected)
+                        chipConnectionStatus.chipIcon =
+                            AppCompatResources.getDrawable(this@BaseChatActivity, R.drawable.ic_disconnected)
+                        chipConnectionStatus.chipBackgroundColor =
+                            ContextCompat.getColorStateList(this@BaseChatActivity, R.color.error_red)
+                    }
+                }
+            } else {
+                with(binding) {
+                    if (isConnected) {
+                        chipConnectionStatus.text = getString(R.string.connected)
+                        chipConnectionStatus.chipIcon =
+                            AppCompatResources.getDrawable(this@BaseChatActivity, R.drawable.ic_connected)
+                        chipConnectionStatus.chipBackgroundColor =
+                            ContextCompat.getColorStateList(this@BaseChatActivity, R.color.success_green)
+                    } else {
+                        chipConnectionStatus.text = getString(R.string.disconnected)
+                        chipConnectionStatus.chipIcon =
+                            AppCompatResources.getDrawable(this@BaseChatActivity, R.drawable.ic_disconnected)
+                        chipConnectionStatus.chipBackgroundColor =
+                            ContextCompat.getColorStateList(this@BaseChatActivity, R.color.error_red)
+                    }
                 }
             }
         }
@@ -198,6 +248,17 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }.also { it.init() }
     }
 
+    private fun loadConnectionInfo() {
+        val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
+
+        bundle?.run {
+            connectionType = getString(Constants.KEY_CONNECTION_TYPE, "WEBSOCKET")
+            audioFormat = getString(Constants.KEY_AUDIO_TYPE, "PCM") ?: "PCM"
+        } ?: run {
+            toast("没有读取到配置")
+        }
+    }
+
     private fun setupToolbar() {
         setSupportActionBar(binding.toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -213,7 +274,16 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    private fun setupRecyclerView() {
+    private fun setupVideoRecyclerView() {
+        messageAdapter = ChatMessageAdapter(true)
+
+        binding.videoChat.recyclerViewMessages.apply {
+            adapter = messageAdapter
+            layoutManager = LinearLayoutManager(this@BaseChatActivity)
+        }
+    }
+
+    private fun setupAudioRecyclerView() {
         messageAdapter = ChatMessageAdapter()
 
         binding.recyclerViewMessages.apply {
@@ -222,32 +292,14 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    private fun setupConnectionInfo() {
-        // 获取连接参数
-        val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
+    private fun setupAudioConnectionInfo() {
+        updateConnectState()
 
-        bundle?.run {
-            connectionType = bundle.getString(Constants.KEY_CONNECTION_TYPE, "WEBSOCKET")
-
-            // TODO 启动 TRTC 采集功能后再显示这个 chip
-            if (connectionType == "TRTC") {
-                binding.chipAudioFormat.isVisible = false
-            }
-
-            audioFormat = bundle.getString(
-                Constants.KEY_AUDIO_TYPE,
-                if (SettingsActivity.Companion.isTRTCRecord(this@BaseChatActivity)) {
-                    "TRTC 采集"
-                } else {
-                    "其它"
-                })
-        } ?: {
-            toast("没有读取到配置")
+        if (connectionType == "TRTC") {
+            binding.chipAudioFormat.isVisible = false
         }
 
-        updateConnectState()
         binding.chipAudioFormat.text = audioFormat
-
         binding.btnEndChat.setOnClickListener {
             stopChat()
         }
@@ -299,35 +351,110 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    private fun ensureMicPermissionAndStart() {
-        val granted = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            startChat()
-            initMicRecorder()
-        } else reqPermission.launch(Manifest.permission.RECORD_AUDIO)
+    private fun bindCollector() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    ConversationManager.messages.collect(this@BaseChatActivity::onMessageUpdate)
+                }
+
+                launch {
+                    ConversationManager.assistantTyping.collect(this@BaseChatActivity::onLLMTyping)
+                }
+            }
+        }
     }
 
-    private fun startRecording() {
+    private fun showAudioUI() {
+        with(binding) {
+            videoChatLayout.visibility = View.GONE
+            toolbar.visibility = View.VISIBLE
+            statusBar.visibility = View.VISIBLE
+            recyclerViewMessages.visibility = View.VISIBLE
+            audioControlPanel.visibility = View.VISIBLE
+        }
+    }
+
+    private fun showVideoUI() {
+        with(binding) {
+            videoChatLayout.visibility = View.VISIBLE
+            toolbar.visibility = View.GONE
+            statusBar.visibility = View.GONE
+            recyclerViewMessages.visibility = View.GONE
+            audioControlPanel.visibility = View.GONE
+        }
+    }
+
+    private fun onMessageUpdate(messageList: List<ChatMessage>) {
+        val lastPosition = messageList.size - 1
+
+        messageAdapter.submitList(messageList) {
+            if (lastPosition >= 0) {
+                val lastMessage = messageList[lastPosition]
+
+                // bot 消息流式输出时在开始输出和结束输出时滑动
+                if ((lastMessage.status != MessageStatus.STREAMING) || (lastMessage.content == "")) {
+                    val rv = if (isVideoMode) binding.videoChat.recyclerViewMessages else binding.recyclerViewMessages
+                    rv.smoothScrollToPosition(lastPosition)
+                }
+            }
+        }
+    }
+
+    private fun onLLMTyping(isTyping: Boolean) {
+        Log.d(TAG, "collect typing: $isTyping")
+
+        if (!isVideoMode) {
+            if (isTyping) {
+                binding.tvAudioStatus.text = getString(R.string.processing)
+                binding.audioVisualizerContainer.visibility = View.VISIBLE
+            } else {
+                binding.audioVisualizerContainer.visibility = View.GONE
+            }
+        }
+    }
+
+    private fun ensurePermissionsAndStart() {
+        val requiredPermissions = if (isVideoMode) {
+            PermissionHelper.VIDEO_MODE_PERMISSIONS
+        } else {
+            PermissionHelper.AUDIO_MODE_PERMISSIONS
+        }
+        
+        if (PermissionHelper.hasPermissions(this, requiredPermissions)) {
+            startChat()
+            initMicRecorder()
+        } else {
+            // 请求缺失的权限
+            val missingPermissions = PermissionHelper.getMissingPermissions(this, requiredPermissions)
+            reqPermissions.launch(missingPermissions.toTypedArray())
+        }
+    }
+
+    protected fun startRecording() {
         if (isPaused || micRecorder == null) return
 
         isRecording = true
-        updateRecordingUI(true)
         micRecorder?.start()
-        binding.tvRecordHint.text = getString(R.string.release_to_send)
-        binding.audioVisualizerContainer.visibility = View.VISIBLE
-        binding.tvAudioStatus.text = getString(R.string.listening)
-        animateRecording()
+
+        if (!isVideoMode) {
+            updateRecordingUI(true)
+            binding.tvRecordHint.text = getString(R.string.release_to_send)
+            binding.audioVisualizerContainer.visibility = View.VISIBLE
+            binding.tvAudioStatus.text = getString(R.string.listening)
+            animateRecording()
+        }
     }
 
-    private fun stopRecording() {
+    protected fun stopRecording() {
         isRecording = false
-        updateRecordingUI(false)
-
         micRecorder?.stop()
-        binding.tvRecordHint.text = getString(R.string.hold_to_speak)
-        binding.tvAudioStatus.text = getString(R.string.processing)
+
+        if (!isVideoMode) {
+            updateRecordingUI(false)
+            binding.tvRecordHint.text = getString(R.string.hold_to_speak)
+            binding.tvAudioStatus.text = getString(R.string.processing)
+        }
     }
 
     private fun pauseRecording() {
@@ -426,6 +553,26 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 //                }
             }
 
+            TWeTalkMessage.TWeTalkMessageType.SERVER_MESSAGE -> {
+                if (message.data is String) {
+                    try {
+                        val jsonData = JSON.parseObject(message.data as String)
+                        val type = jsonData.getString("type")
+
+                        // 如果是请求图片则捕获相机并发送一张图片
+                        if (type == "request_image") {
+                            // send image
+                            cameraManager?.captureImage()
+                        }
+                    } catch (e: JSONException) {
+                        Log.e(
+                            TAG,
+                            "handleMessage: unknown json data: ${message.data as String}, error msg: ${e.message}"
+                        )
+                    }
+                }
+            }
+
             // 其余消息根据情况处理
             TWeTalkMessage.TWeTalkMessageType.USER_TRANSCRIPTION,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_TEXT,
@@ -433,8 +580,6 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STOPPED -> {
 //                Log.d(TAG, "handleMessage, data: $message")
             }
-
-            TWeTalkMessage.TWeTalkMessageType.SERVER_MESSAGE -> TODO()
         }
     }
 
@@ -461,6 +606,8 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         player.release()
         micRecorder?.release()
         micRecorder = null
+        cameraManager?.release()
+        cameraManager = null
     }
 
     override fun onDestroy() {

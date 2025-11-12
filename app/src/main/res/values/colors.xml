@@ -18,7 +18,11 @@
     <color name="user_message_bg">#E3F2FD</color>
     <color name="ai_message_bg">#F5F5F5</color>
     <color name="message_text">#212121</color>
-    
+    <color name="user_video_msg_bg">#CCC2DC</color>
+    <color name="user_video_msg_text">#000000</color>
+    <color name="ai_video_msg_bg">#2B2930</color>
+    <color name="ai_video_msg_text">#FFFFFF</color>
+
     <!-- 状态色彩 -->
     <color name="success_green">#4CAF50</color>
     <color name="error_red">#F44336</color>

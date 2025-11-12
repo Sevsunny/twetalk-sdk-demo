@@ -17,4 +17,5 @@ object Constants {
     const val KEY_SDK_APP_ID = "sdk_app_id"
     const val KEY_SDK_SECRET_KEY = "sdk_secret_key"
     const val KEY_USER_ID = "user_id"
+    const val KEY_VIDEO_MODE = "video_mode"
 }

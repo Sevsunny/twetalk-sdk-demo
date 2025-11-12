@@ -53,6 +53,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                     rbPCM.isChecked = true
                 }
 
+                val isVideoMode = this.getBoolean(Constants.KEY_VIDEO_MODE, false)
+                switchVideoChat.isChecked = isVideoMode
+
                 // TRTC 其它参数反向渲染
                 etUserId.setText(this.getString(Constants.KEY_USER_ID, null) ?: BuildConfig.userId)
 
@@ -157,6 +160,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         binding.layoutWebSocketParams.visibility = View.VISIBLE
         binding.layoutTRTCParams.visibility = View.GONE
         binding.cardAudioFormat.visibility = View.VISIBLE
+        binding.cardVideoChat.visibility = View.VISIBLE
     }
 
     private fun showTRTCParams() {
@@ -169,6 +173,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         }
 
         binding.cardAudioFormat.visibility = View.GONE
+
+        // TRTC 连接时暂不支持视频聊天
+        binding.switchVideoChat.isChecked = false
+        binding.cardVideoChat.visibility = View.GONE
     }
 
     private fun setupConnectButton() {
@@ -189,6 +197,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             putString(Constants.KEY_PRODUCT_ID, binding.etProductId.text.toString())
             putString(Constants.KEY_DEVICE_NAME, binding.etDeviceName.text.toString())
             putString(Constants.KEY_LANGUAGE, selectedLanguage)
+            putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
         }
 
         val intent = when (connectionType) {

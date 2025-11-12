@@ -11,7 +11,9 @@ import com.tencent.twetalk_sdk_demo.data.MessageStatus
 import com.tencent.twetalk_sdk_demo.data.MessageType
 import com.tencent.twetalk_sdk_demo.databinding.ItemChatMessageBinding
 
-class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageViewHolder>(MessageDiffCallback()) {
+class ChatMessageAdapter(
+    private val isVideoMode: Boolean = false
+) : ListAdapter<ChatMessage, ChatMessageAdapter.MessageViewHolder>(MessageDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): MessageViewHolder {
         val binding = ItemChatMessageBinding.inflate(
@@ -19,14 +21,18 @@ class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageVi
             parent,
             false
         )
-        return MessageViewHolder(binding)
+
+        return MessageViewHolder(binding, isVideoMode)
     }
 
     override fun onBindViewHolder(holder: MessageViewHolder, position: Int) {
         holder.bind(getItem(position))
     }
 
-    class MessageViewHolder(private val binding: ItemChatMessageBinding) : RecyclerView.ViewHolder(binding.root) {
+    class MessageViewHolder(
+        private val binding: ItemChatMessageBinding,
+        private val isVideoMode: Boolean
+    ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(message: ChatMessage) {
             with(binding) {
@@ -34,6 +40,8 @@ class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageVi
                 layoutUserMessage.visibility = View.GONE
                 layoutAiMessage.visibility = View.GONE
                 layoutSystemMessage.visibility = View.GONE
+                layoutUserVideoMessage.visibility = View.GONE
+                layoutAIVideoMessage.visibility = View.GONE
 
                 when (message.messageType) {
                     MessageType.SYSTEM -> {
@@ -42,16 +50,28 @@ class ChatMessageAdapter : ListAdapter<ChatMessage, ChatMessageAdapter.MessageVi
                     }
 
                     MessageType.USER -> {
-                        layoutUserMessage.visibility = View.VISIBLE
-                        tvUserMessage.text = message.content
-                        tvUserTime.text = message.getFormattedTime()
+                        if (isVideoMode) {
+                            layoutUserVideoMessage.visibility = View.VISIBLE
+                            tvUserVideoMessage.text = message.content
+                        } else {
+                            layoutUserMessage.visibility = View.VISIBLE
+                            tvUserMessage.text = message.content
+                            tvUserTime.text = message.getFormattedTime()
+                        }
                     }
 
                     MessageType.BOT -> {
-                        layoutAiMessage.visibility = View.VISIBLE
                         val typingIndicator = if (message.status == MessageStatus.STREAMING) " ▋" else ""
-                        tvAiMessage.text = message.content + typingIndicator
-                        tvAiTime.text = message.getFormattedTime()
+                        val content = message.content + typingIndicator
+
+                        if (isVideoMode) {
+                            layoutAIVideoMessage.visibility = View.VISIBLE
+                            tvAIVideoMessage.text = content
+                        } else {
+                            layoutAiMessage.visibility = View.VISIBLE
+                            tvAiMessage.text = content
+                            tvAiTime.text = message.getFormattedTime()
+                        }
                     }
                 }
             }

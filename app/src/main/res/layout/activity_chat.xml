@@ -72,7 +72,6 @@
     </LinearLayout>
 
     <!-- 消息列表 -->
-
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerViewMessages"
         android:layout_width="0dp"
@@ -191,5 +190,17 @@
             android:layout_gravity="center"
             android:visibility="visible"
             app:layout_constraintBottom_toBottomOf="parent" />
+    </FrameLayout>
+
+    <!-- 视频聊天界面 -->
+    <FrameLayout
+        android:id="@+id/videoChatLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" >
+
+        <include
+            android:id="@+id/videoChat"
+            layout="@layout/activity_video_chat" />
     </FrameLayout>
 </androidx.constraintlayout.widget.ConstraintLayout>

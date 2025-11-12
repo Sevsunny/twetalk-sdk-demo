@@ -165,4 +165,48 @@
 
     </LinearLayout>
 
+    <!-- 视频聊天时用户消息布局 -->
+    <LinearLayout
+        android:id="@+id/layoutUserVideoMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="end"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tvUserVideoMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_user_video_msg"
+            android:maxWidth="240dp"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp"
+            android:text="视频聊天时用户消息"
+            android:textColor="@color/user_video_msg_text"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
+    <!-- 视频聊天时 AI 消息布局 -->
+    <LinearLayout
+        android:id="@+id/layoutAIVideoMessage"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="start"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tvAIVideoMessage"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_ai_video_msg"
+            android:maxWidth="240dp"
+            android:paddingHorizontal="20dp"
+            android:paddingVertical="8dp"
+            android:text="视频聊天时 AI 消息"
+            android:textColor="@color/ai_video_msg_text"
+            android:textSize="12sp" />
+
+    </LinearLayout>
+
 </LinearLayout>
