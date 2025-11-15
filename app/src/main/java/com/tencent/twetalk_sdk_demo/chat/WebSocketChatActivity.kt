@@ -56,8 +56,11 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
             audioType,
             language
         ).apply {
-//            baseUrl = "ws://iot-twetalk-webrtc-test.tencentiotcloud.com/ws"
-            baseUrl = "ws://43.144.101.48:7860/ws_vl"
+            baseUrl = if (isVideoMode) {
+                "ws://43.144.101.48:7860/ws_vl"
+            } else {
+                "ws://iot-twetalk-pre.tencentiotcloud.com/ws"
+            }
         }
 
         config = TWeTalkConfig.builder()

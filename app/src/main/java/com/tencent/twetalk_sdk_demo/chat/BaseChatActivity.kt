@@ -41,7 +41,10 @@ import com.tencent.twetalk_sdk_demo.data.MessageStatus
 import com.tencent.twetalk_sdk_demo.databinding.ActivityChatBinding
 import com.tencent.twetalk_sdk_demo.utils.PermissionHelper
 import com.tencent.twetalk_sdk_demo.video.VideoChatCameraManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     companion object {
@@ -74,6 +77,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     private var micRecorder: MicRecorder? = null
+    @Volatile private var isMicRecorderInitialized = false
 
     protected val reqPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -234,18 +238,31 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     protected fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
 
     private fun initMicRecorder() {
-        // TODO 修改适配一下，如果是使用 TRTC 采集音频的情况
-        val audioConfig = if (audioFormat.equals("OPUS", true)) {
-            AudioConfig(chunkMs = 60, formatType = AudioFormatType.OPUS)
-        } else {
-//            val pcmFile = File(this.getExternalFilesDir(null), "test_${System.currentTimeMillis()}.pcm")
-//            AudioConfig(saveToFile = true, filePath = pcmFile.absolutePath)
-            AudioConfig()
-        }
+        // TODO 修改适配一下,如果是使用 TRTC 采集音频的情况
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val audioConfig = if (audioFormat.equals("OPUS", true)) {
+                    AudioConfig(chunkMs = 60, formatType = AudioFormatType.OPUS)
+                } else {
+//                    val pcmFile = File(this@BaseChatActivity.getExternalFilesDir(null), "test_${System.currentTimeMillis()}.pcm")
+//                    AudioConfig(saveToFile = true, filePath = pcmFile.absolutePath)
+                    AudioConfig()
+                }
 
-        micRecorder = MicRecorder(audioConfig) { audioData ->
-            onAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
-        }.also { it.init() }
+                micRecorder = MicRecorder(audioConfig) { audioData ->
+                    onAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
+                }.also { 
+                    it.init()
+                    isMicRecorderInitialized = true
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "MicRecorder init failed", e)
+
+                lifecycleScope.launch(Dispatchers.Main) {
+                    toast("麦克风初始化失败: ${e.message}")
+                }
+            }
+        }
     }
 
     private fun loadConnectionInfo() {
@@ -432,7 +449,46 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     protected fun startRecording() {
-        if (isPaused || micRecorder == null) return
+        if (isPaused) return
+
+        if (isMicRecorderInitialized) {
+            performRecording()
+            return
+        }
+
+        lifecycleScope.launch {
+            // 如果没有完成初始化则等待
+            withContext(Dispatchers.IO) {
+                val startTime = System.currentTimeMillis()
+                val timeout = 5000L // 5秒超时
+
+                while (!isMicRecorderInitialized && (System.currentTimeMillis() - startTime) < timeout) {
+                    Thread.sleep(50)
+                }
+
+                if (!isMicRecorderInitialized) {
+                    Log.e(TAG, "MicRecorder initialization timeout")
+
+                    withContext(Dispatchers.Main) {
+                        toast("麦克风初始化超时，请重试")
+                    }
+
+                    return@withContext
+                }
+            }
+
+            withContext(Dispatchers.Main) {
+                performRecording()
+            }
+        }
+    }
+
+    private fun performRecording() {
+        if (micRecorder == null) {
+            Log.e(TAG, "MicRecorder is null")
+            toast("麦克风未就绪，请重试")
+            return
+        }
 
         isRecording = true
         micRecorder?.start()
@@ -603,6 +659,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     private fun releaseInternal() {
+        isMicRecorderInitialized = false
         player.release()
         micRecorder?.release()
         micRecorder = null
