@@ -237,8 +237,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     private fun initMicRecorder() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // 默认 OPUS 格式
-                val audioConfig = AudioConfig(chunkMs = 60, formatType = AudioFormatType.OPUS)
+                val audioConfig = AudioConfig()
                 micRecorder = MicRecorder(audioConfig) { audioData ->
                     if (isWebSocketConnected && callState == CallState.IN_PROGRESS) {
                         client?.sendCustomAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
@@ -271,7 +270,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     private fun handleWebSocketUrlReply(params: Map<String?, Any?>?) {
         val token = params?.get("token") as? String
-        val websocketUrl = params?.get("websocket_url") as? String
+//        val websocketUrl = params?.get("websocket_url") as? String
+        val websocketUrl = "ws://43.144.104.72:7860/ws_voip"
 
         if (token.isNullOrEmpty() || websocketUrl.isNullOrEmpty()) {
             runOnUiThread {
@@ -300,6 +300,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             .roomId(roomId)
             .appId(appId)
             .modelId(modelId)
+            .audioType("PCM")
             .response("answer")  // 接听
             .build()
 
@@ -308,7 +309,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             productId,
             deviceName,
             token,
-            "OPUS",
+            "PCM",
             "zh"
         )
 
@@ -353,7 +354,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     private fun handleWebSocketUrlReplyForReject(params: Map<String?, Any?>?) {
         val token = params?.get("token") as? String
-        val websocketUrl = params?.get("websocket_url") as? String
+//        val websocketUrl = params?.get("websocket_url") as? String
+        val websocketUrl = "ws://43.144.104.72:7860/ws_voip"
 
         if (token.isNullOrEmpty() || websocketUrl.isNullOrEmpty()) {
             runOnUiThread {
@@ -381,6 +383,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             .roomId(roomId)
             .appId(appId)
             .modelId(modelId)
+            .audioType("PCM")
             .response("reject")  // 拒接
             .build()
 
@@ -389,7 +392,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             productId,
             deviceName,
             token,
-            "OPUS",
+            "PCM",
             "zh"
         )
 
@@ -570,7 +573,12 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         }
     }
 
+    private var isFirstAudioFrameArrive = false
     override fun onRecvAudio(audio: ByteArray, sampleRate: Int, channels: Int, format: AudioFormat) {
+        if (!isFirstAudioFrameArrive) {
+            isFirstAudioFrameArrive = true
+        }
+
         val sr = if (sampleRate > 0) sampleRate else 16000
         val ch = if (channels > 0) channels else 1
         val isPcm = format == AudioFormat.PCM
@@ -604,7 +612,6 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         stopVibration()
         player.release()
         micRecorder?.release()
-        client?.close()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 }
