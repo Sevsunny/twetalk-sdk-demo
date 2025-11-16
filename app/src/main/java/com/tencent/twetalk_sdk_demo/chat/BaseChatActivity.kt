@@ -3,6 +3,7 @@ package com.tencent.twetalk_sdk_demo.chat
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.SharedPreferences
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -29,7 +30,6 @@ import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
-import com.tencent.twetalk_sdk_demo.SettingsActivity
 import com.tencent.twetalk_sdk_demo.adapter.ChatMessageAdapter
 import com.tencent.twetalk_sdk_demo.audio.AudioConfig
 import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
@@ -44,7 +44,6 @@ import com.tencent.twetalk_sdk_demo.video.VideoChatCameraManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     companion object {
@@ -120,6 +119,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             ?.getBoolean(Constants.KEY_VIDEO_MODE) ?: false
 
         loadConnectionInfo()
+        setupRecordButton()
 
         if (isVideoMode) {
             showVideoUI()
@@ -323,16 +323,17 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     private fun setupAudioControls() {
-        setupRecordButton()
+//        setupRecordButton()
         setupControlButtons()
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupRecordButton() {
-        binding.fabRecord.setOnTouchListener { v, event ->
+        val recordListener = View.OnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     if (!isPaused) {
+                        player.stop()
                         startRecording()
                     }
 
@@ -349,7 +350,10 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
                 else -> false
             }
-        }
+         }
+
+        binding.fabRecord.setOnTouchListener(recordListener)
+        binding.videoChat.fabAudioRecord.setOnTouchListener(recordListener)
     }
 
     private fun setupControlButtons() {
@@ -494,11 +498,13 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         micRecorder?.start()
 
         if (!isVideoMode) {
-            updateRecordingUI(true)
+            updateAudioRecordingUI(true)
             binding.tvRecordHint.text = getString(R.string.release_to_send)
             binding.audioVisualizerContainer.visibility = View.VISIBLE
             binding.tvAudioStatus.text = getString(R.string.listening)
             animateRecording()
+        } else {
+            updateVideoRecordingUI(true)
         }
     }
 
@@ -507,9 +513,11 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         micRecorder?.stop()
 
         if (!isVideoMode) {
-            updateRecordingUI(false)
+            updateAudioRecordingUI(false)
             binding.tvRecordHint.text = getString(R.string.hold_to_speak)
             binding.tvAudioStatus.text = getString(R.string.processing)
+        } else {
+            updateVideoRecordingUI(false)
         }
     }
 
@@ -527,7 +535,25 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         toast("录音已恢复")
     }
 
-    private fun updateRecordingUI(recording: Boolean) {
+    private fun updateVideoRecordingUI(recording: Boolean) {
+        if (recording) {
+            binding.videoChat.fabAudioRecord.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.error_red)
+            binding.videoChat.fabAudioRecord.setImageResource(R.drawable.ic_mic_recording)
+
+            val color = ContextCompat.getColor(this, R.color.white)
+            binding.videoChat.fabAudioRecord.setImageTintList(ColorStateList.valueOf(color))
+        } else {
+            binding.videoChat.fabAudioRecord.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.white)
+            binding.videoChat.fabAudioRecord.setImageResource(R.drawable.ic_mic)
+
+            val color = ContextCompat.getColor(this, R.color.primary_blue)
+            binding.videoChat.fabAudioRecord.setImageTintList(ColorStateList.valueOf(color))
+        }
+    }
+
+    private fun updateAudioRecordingUI(recording: Boolean) {
         if (recording) {
             binding.fabRecord.backgroundTintList = 
                 ContextCompat.getColorStateList(this, R.color.error_red)
@@ -552,7 +578,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     protected fun handleMessage(message: TWeTalkMessage) {
         when (message.type) {
             TWeTalkMessage.TWeTalkMessageType.AUDIO_DATA -> {
-                if (message.data is TWeTalkMessage.AudioMessage) {
+                if (message.data is TWeTalkMessage.AudioMessage && !isRecording) {
                     val audioMsg = message.data as TWeTalkMessage.AudioMessage
                     val sr = if (audioMsg.sampleRate > 0) audioMsg.sampleRate else 16000
                     val ch = if (audioMsg.numChannels > 0) audioMsg.numChannels else 1

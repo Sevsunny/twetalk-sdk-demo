@@ -101,7 +101,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                 updateConnectState()
 
                 if (isVideoMode) {
-                    startRecording()
+//                    startRecording()
                     cameraManager?.startCamera()
                 }
 

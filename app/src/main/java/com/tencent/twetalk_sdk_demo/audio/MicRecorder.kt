@@ -226,7 +226,7 @@ class MicRecorder(
         
         // 创建 AudioRecord
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+            MediaRecorder.AudioSource.MIC,
             config.sampleRate,
             channelConfig,
             audioFormat,
