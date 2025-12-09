@@ -76,6 +76,83 @@
             android:orientation="vertical"
             android:padding="16dp">
 
+            <!-- 设备信息卡片 -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="16dp"
+                app:cardCornerRadius="12dp"
+                app:cardElevation="4dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="16dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical"
+                        android:layout_marginBottom="12dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/device_status"
+                            android:textColor="@color/gray_text"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipMqttStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/mqtt_offline"
+                            android:textColor="@color/white"
+                            app:chipIcon="@drawable/ic_disconnected"
+                            app:chipIconTint="@color/white"
+                            app:chipBackgroundColor="@color/error_red" />
+
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvDeviceInfo"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/gray_text"
+                        android:textSize="14sp"
+                        android:layout_marginBottom="12dp"
+                        android:text="@string/device_info_format" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnChangeDevice"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/change_device"
+                        android:textColor="@color/primary_blue"
+                        app:icon="@drawable/ic_swap"
+                        app:iconTint="@color/primary_blue" />
+
+                    <TextView
+                        android:id="@+id/tvMqttHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/error_background"
+                        android:padding="8dp"
+                        android:text="@string/mqtt_offline_hint"
+                        android:textColor="@color/error_red"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                </LinearLayout>
+
+            </com.google.android.material.card.MaterialCardView>
+
             <!-- 连接方式选择 -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
@@ -179,166 +256,6 @@
                             </LinearLayout>
 
                         </com.google.android.material.card.MaterialCardView>
-
-                    </LinearLayout>
-
-                </LinearLayout>
-
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- 参数配置 -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:text="@string/connection_config"
-                        android:textColor="@color/gray_text"
-                        android:textSize="16sp"
-                        android:textStyle="bold" />
-
-                    <!-- 通用参数 -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:hint="@string/product_id"
-                        app:boxStrokeColor="@color/primary_blue"
-                        app:hintTextColor="@color/primary_blue">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etProductId"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="text" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:hint="@string/device_name"
-                        app:boxStrokeColor="@color/primary_blue"
-                        app:hintTextColor="@color/primary_blue">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etDeviceName"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="text" />
-
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- WebSocket 专用参数 -->
-                    <LinearLayout
-                        android:id="@+id/layoutWebSocketParams"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:visibility="visible">
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:hint="@string/secret_id"
-                            app:boxStrokeColor="@color/primary_blue"
-                            app:hintTextColor="@color/primary_blue">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etSecretId"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="text" />
-
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:hint="@string/secret_key"
-                            app:boxStrokeColor="@color/primary_blue"
-                            app:hintTextColor="@color/primary_blue">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etSecretKey"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textPassword" />
-
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                    </LinearLayout>
-
-                    <!-- TRTC 专用参数 -->
-                    <LinearLayout
-                        android:id="@+id/layoutTRTCParams"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:visibility="gone">
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:hint="@string/sdk_app_id"
-                            app:boxStrokeColor="@color/primary_blue"
-                            app:hintTextColor="@color/primary_blue">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etSdkAppId"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="number" />
-
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:hint="@string/sdk_secret_key"
-                            app:boxStrokeColor="@color/primary_blue"
-                            app:hintTextColor="@color/primary_blue">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etSdkSecretKey"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textPassword" />
-
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginBottom="8dp"
-                            android:hint="@string/user_id"
-                            app:boxStrokeColor="@color/primary_blue"
-                            app:hintTextColor="@color/primary_blue">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etUserId"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="text" />
-
-                        </com.google.android.material.textfield.TextInputLayout>
 
                     </LinearLayout>
 

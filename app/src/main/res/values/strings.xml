@@ -131,4 +131,28 @@
     <string name="invalid_json">无效的 JSON 格式</string>
     <string name="expand">展开</string>
     <string name="collapse">收起</string>
+    
+    <!-- 设备绑定 -->
+    <string name="device_bind_title">设备绑定</string>
+    <string name="device_bind_welcome">欢迎使用 TWeTalk</string>
+    <string name="device_bind_subtitle">请输入设备信息完成绑定</string>
+    <string name="device_secret">Device Secret</string>
+    <string name="bind_device">绑定设备</string>
+    <string name="bind_success">绑定成功</string>
+    <string name="connection_failed">连接失败</string>
+    <string name="connecting_device">正在连接设备...</string>
+    
+    <!-- 设备状态 -->
+    <string name="device_status">设备状态</string>
+    <string name="device_info_format">设备: %1$s / %2$s</string>
+    <string name="change_device">切换设备</string>
+    <string name="mqtt_online">MQTT 在线</string>
+    <string name="mqtt_offline">MQTT 离线</string>
+    <string name="mqtt_offline_hint">设备离线，无法使用 AI 聊天功能</string>
+    <string name="mqtt_not_initialized">MQTT 未初始化，请重新绑定设备</string>
+    <string name="mqtt_connecting">正在连接 MQTT...</string>
+    <string name="mqtt_connected_success">MQTT 连接成功</string>
+    <string name="mqtt_disconnected">MQTT 连接已断开</string>
+    <string name="mqtt_connect_failed">MQTT 连接失败</string>
+    <string name="mqtt_connect_failed_with_reason">MQTT 连接失败: %1$s</string>
 </resources>

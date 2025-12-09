@@ -5,12 +5,14 @@ import android.content.SharedPreferences
 import android.os.Bundle
 import android.view.View
 import android.widget.AdapterView
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
+import androidx.preference.PreferenceManager.getDefaultSharedPreferences
 import com.google.android.material.card.MaterialCardView
 import com.tencent.twetalk.core.TWeTalkConfig
+import com.tencent.twetalk.mqtt.MqttManager
 import com.tencent.twetalk_sdk_demo.chat.TRTCChatActivity
 import com.tencent.twetalk_sdk_demo.chat.WebSocketChatActivity
 import com.tencent.twetalk_sdk_demo.data.Constants
@@ -20,7 +22,52 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     private var selectedLanguage = "zh"
     private var connectionType = TWeTalkConfig.TransportType.WEBSOCKET
 
+    private val mqttCallback = object : MqttManager.MqttConnectionCallback {
+        override fun onConnected() {
+            runOnUiThread {
+                updateMqttStatus(true)
+                enableConnect(true)
+                showToast(getString(R.string.mqtt_connected_success))
+            }
+        }
+
+        override fun onDisconnected(cause: Throwable?) {
+            runOnUiThread {
+                updateMqttStatus(false)
+                enableConnect(false)
+                showToast(getString(R.string.mqtt_disconnected))
+            }
+        }
+
+        override fun onConnectFailed(cause: Throwable?) {
+            runOnUiThread {
+                updateMqttStatus(false)
+                enableConnect(false)
+                val errorMsg = cause?.message ?: getString(R.string.mqtt_connect_failed)
+                showToast(getString(R.string.mqtt_connect_failed_with_reason, errorMsg))
+            }
+        }
+
+        override fun onMessageReceived(
+            topic: String,
+            method: String,
+            params: Map<String, Any>
+        ) {
+            // 不需要处理
+        }
+    }
+
     override fun getViewBinding() = ActivityMainBinding.inflate(layoutInflater)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        
+        // 检查是否已绑定设备
+        if (!isDeviceBound()) {
+            navigateToDeviceBind()
+            return
+        }
+    }
 
     override fun initView() {
         setupToolbar()
@@ -29,6 +76,130 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         setupConnectButton()
         setupNavigationButtons()
         loadDefaultConfig()
+        
+        // 先注册监听器，再尝试连接
+        observeMqttStatus()
+        setupDeviceInfo()
+    }
+
+    /**
+     * 检查是否已绑定设备
+     */
+    private fun isDeviceBound(): Boolean {
+        val prefs = getDefaultSharedPreferences(this)
+        val productId = prefs.getString(Constants.KEY_PRODUCT_ID, null)
+        val deviceName = prefs.getString(Constants.KEY_DEVICE_NAME, null)
+        val deviceSecret = prefs.getString(Constants.KEY_DEVICE_SECRET, null)
+        
+        return !productId.isNullOrEmpty() && !deviceName.isNullOrEmpty() && !deviceSecret.isNullOrEmpty()
+    }
+
+    /**
+     * 跳转到设备绑定界面
+     */
+    private fun navigateToDeviceBind() {
+        val intent = Intent(this, DeviceBindActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
+    /**
+     * 设置设备信息显示和状态
+     */
+    private fun setupDeviceInfo() {
+        val prefs = getDefaultSharedPreferences(this)
+        val productId = prefs.getString(Constants.KEY_PRODUCT_ID, "") ?: ""
+        val deviceName = prefs.getString(Constants.KEY_DEVICE_NAME, "") ?: ""
+        
+        binding.tvDeviceInfo.text = getString(R.string.device_info_format, productId, deviceName)
+        
+        // 设置切换设备按钮
+        binding.btnChangeDevice.setOnClickListener {
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("切换设备")
+                .setMessage("该操作将会使当前设备下线，是否继续？")
+                .setPositiveButton("是") { _,_ ->
+                    run {
+                        mqttManager?.disconnect()
+                        navigateToDeviceBind()
+                    }
+                }
+                .setNegativeButton("否", null)
+                .show()
+        }
+        
+        // 自动登录：尝试连接 MQTT（如果未连接）
+        if (mqttManager == null) {
+            // MQTT 未初始化，提示用户重新绑定
+            showToast(getString(R.string.mqtt_not_initialized))
+            navigateToDeviceBind()
+            return
+        }
+
+        if (!mqttManager!!.isConnected) {
+            // 显示连接中状态
+            showToast(getString(R.string.mqtt_connecting))
+            mqttManager!!.connect()
+        }
+    }
+
+    /**
+     * 监听 MQTT 连接状态
+     */
+    private fun observeMqttStatus() {
+        mqttManager?.addCallback(mqttCallback)
+        
+        // 初始状态
+        val isConnected = mqttManager?.isConnected ?: false
+        updateMqttStatus(isConnected)
+        enableConnect(isConnected)
+    }
+
+    /**
+     * 更新 MQTT 连接状态显示
+     */
+    private fun updateMqttStatus(connected: Boolean) {
+        with(binding.chipMqttStatus) {
+            if (connected) {
+                text = getString(R.string.mqtt_online)
+                chipIcon = AppCompatResources.getDrawable(
+                    this@MainActivity, 
+                    R.drawable.ic_connected
+                )
+                chipBackgroundColor = ContextCompat.getColorStateList(
+                    this@MainActivity, 
+                    R.color.success_green
+                )
+            } else {
+                text = getString(R.string.mqtt_offline)
+                chipIcon = AppCompatResources.getDrawable(
+                    this@MainActivity,
+                    R.drawable.ic_disconnected
+                )
+                chipBackgroundColor = ContextCompat.getColorStateList(
+                    this@MainActivity,
+                    R.color.error_red
+                )
+            }
+        }
+    }
+
+    /**
+     * 启用/禁用连接功能
+     */
+    private fun enableConnect(enabled: Boolean) {
+        binding.fabConnect.isEnabled = enabled
+        binding.cardWebSocket.isEnabled = enabled
+        binding.cardTRTC.isEnabled = enabled
+        binding.cardAudioFormat.alpha = if (enabled) 1.0f else 0.5f
+        binding.cardVideoChat.alpha = if (enabled) 1.0f else 0.5f
+        
+        if (!enabled) {
+            binding.tvMqttHint.visibility = View.VISIBLE
+        } else {
+            binding.tvMqttHint.visibility = View.GONE
+        }
     }
 
     private fun loadDefaultConfig() {
@@ -56,9 +227,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 val isVideoMode = this.getBoolean(Constants.KEY_VIDEO_MODE, false)
                 switchVideoChat.isChecked = isVideoMode
 
-                // TRTC 其它参数反向渲染
-                etUserId.setText(this.getString(Constants.KEY_USER_ID, null) ?: BuildConfig.userId)
-
                 val language = this.getString(Constants.KEY_LANGUAGE, "zh")
 
                 if (language == "en") {
@@ -66,30 +234,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 } else {
                     spinnerLanguage.setSelection(0)
                 }
-            }
-
-            // 设备信息反向渲染
-            getSharedPreferences(Constants.KEY_DEVICE_INFO_PREF, MODE_PRIVATE).run {
-                etProductId.setText(this.getString(Constants.KEY_PRODUCT_ID, null) ?: BuildConfig.productId)
-                etDeviceName.setText(this.getString(Constants.KEY_DEVICE_NAME, null) ?: BuildConfig.deviceName)
-            }
-
-            // 密钥信息反向渲染
-            val masterKey = MasterKey.Builder(this@MainActivity)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-
-            EncryptedSharedPreferences.create(
-                this@MainActivity,
-                Constants.KEY_SECRET_INFO_PREF,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            ).run {
-                etSecretId.setText(this.getString(Constants.KEY_SECRET_ID, null) ?: BuildConfig.secretId)
-                etSecretKey.setText(this.getString(Constants.KEY_SECRET_KEY, null) ?: BuildConfig.secretKey)
-                etSdkAppId.setText(this.getString(Constants.KEY_SDK_APP_ID, null) ?: BuildConfig.sdkAppId)
-                etSdkSecretKey.setText(this.getString(Constants.KEY_SDK_SECRET_KEY, null) ?: BuildConfig.sdkSecretKey)
             }
         }
     }
@@ -135,12 +279,25 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         when (type) {
             TWeTalkConfig.TransportType.WEBSOCKET -> {
                 setCardSelected(binding.cardWebSocket)
-                showWebSocketParams()
+                // WebSocket 模式下显示音频格式和视频选项
+                binding.cardAudioFormat.visibility = View.VISIBLE
+                binding.cardVideoChat.visibility = View.VISIBLE
             }
 
             TWeTalkConfig.TransportType.TRTC -> {
                 setCardSelected(binding.cardTRTC)
-                showTRTCParams()
+                
+                // TRTC 模式下强制 PCM
+                if (binding.rbOpus.isChecked) {
+                    binding.rbOpus.isChecked = false
+                    binding.rbPCM.isChecked = true
+                }
+                
+                binding.cardAudioFormat.visibility = View.GONE
+                
+                // TRTC 连接时暂不支持视频聊天
+                binding.switchVideoChat.isChecked = false
+                binding.cardVideoChat.visibility = View.GONE
             }
         }
     }
@@ -156,29 +313,6 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         card.cardElevation = 8f
     }
 
-    private fun showWebSocketParams() {
-        binding.layoutWebSocketParams.visibility = View.VISIBLE
-        binding.layoutTRTCParams.visibility = View.GONE
-        binding.cardAudioFormat.visibility = View.VISIBLE
-        binding.cardVideoChat.visibility = View.VISIBLE
-    }
-
-    private fun showTRTCParams() {
-        binding.layoutWebSocketParams.visibility = View.GONE
-        binding.layoutTRTCParams.visibility = View.VISIBLE
-
-        if (binding.rbOpus.isChecked) {
-            binding.rbOpus.isChecked = false
-            binding.rbPCM.isChecked = true
-        }
-
-        binding.cardAudioFormat.visibility = View.GONE
-
-        // TRTC 连接时暂不支持视频聊天
-        binding.switchVideoChat.isChecked = false
-        binding.cardVideoChat.visibility = View.GONE
-    }
-
     private fun setupConnectButton() {
         binding.fabConnect.setOnClickListener {
             connect()
@@ -186,39 +320,28 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     }
 
     private fun connect() {
-        if (!validateInputs()) {
-            return
-        }
+        // 获取已保存的设备信息
+        val prefs = getDefaultSharedPreferences(this)
+        val productId = prefs.getString(Constants.KEY_PRODUCT_ID, "") ?: ""
+        val deviceName = prefs.getString(Constants.KEY_DEVICE_NAME, "") ?: ""
 
         // 跳转到聊天界面
         val bundle = Bundle().apply {
             putString(Constants.KEY_CONNECTION_TYPE, connectionType.name)
             putString(Constants.KEY_AUDIO_TYPE, getSelectedAudioType())
-            putString(Constants.KEY_PRODUCT_ID, binding.etProductId.text.toString())
-            putString(Constants.KEY_DEVICE_NAME, binding.etDeviceName.text.toString())
+            putString(Constants.KEY_PRODUCT_ID, productId)
+            putString(Constants.KEY_DEVICE_NAME, deviceName)
             putString(Constants.KEY_LANGUAGE, selectedLanguage)
             putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
         }
 
         val intent = when (connectionType) {
             TWeTalkConfig.TransportType.WEBSOCKET -> {
-                bundle.putString(Constants.KEY_SECRET_ID, binding.etSecretId.text.toString())
-                bundle.putString(Constants.KEY_SECRET_KEY, binding.etSecretKey.text.toString())
-
                 Intent(this@MainActivity, WebSocketChatActivity::class.java)
                     .putExtra(Constants.KEY_CHAT_BUNDLE, bundle)
             }
 
             TWeTalkConfig.TransportType.TRTC -> {
-                bundle.putString(Constants.KEY_SDK_APP_ID, binding.etSdkAppId.text.toString())
-                bundle.putInt(Constants.KEY_SDK_APP_ID, binding.etSdkAppId.text.toString().trim().toIntOrNull() ?: 0)
-                bundle.putString(Constants.KEY_SDK_SECRET_KEY, binding.etSdkSecretKey.text.toString())
-
-                // userId 选填，如果没有则不传，默认会取 productId_deviceName
-                if (!binding.etUserId.text.isNullOrBlank()) {
-                    bundle.putString(Constants.KEY_USER_ID, binding.etUserId.text.toString())
-                }
-
                 Intent(this@MainActivity, TRTCChatActivity::class.java)
                     .putExtra(Constants.KEY_CHAT_BUNDLE, bundle)
             }
@@ -227,51 +350,12 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         // 保存上次连接的方式
         getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).edit {
             putString(Constants.KEY_CONNECTION_TYPE, connectionType.name)
+            putString(Constants.KEY_AUDIO_TYPE, getSelectedAudioType())
+            putString(Constants.KEY_LANGUAGE, selectedLanguage)
+            putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
         }
 
         startActivity(intent)
-    }
-
-    private fun validateInputs(): Boolean {
-        // 验证通用参数
-        if (binding.etProductId.text.isNullOrBlank()) {
-            binding.etProductId.error = getString(R.string.required_field)
-            return false
-        }
-
-        if (binding.etDeviceName.text.isNullOrBlank()) {
-            binding.etDeviceName.error = getString(R.string.required_field)
-            return false
-        }
-
-        // 验证特定连接方式的参数
-        when (connectionType) {
-            TWeTalkConfig.TransportType.WEBSOCKET -> {
-                if (binding.etSecretId.text.isNullOrBlank()) {
-                    binding.etSecretId.error = getString(R.string.required_field)
-                    return false
-                }
-
-                if (binding.etSecretKey.text.isNullOrBlank()) {
-                    binding.etSecretKey.error = getString(R.string.required_field)
-                    return false
-                }
-            }
-
-            TWeTalkConfig.TransportType.TRTC -> {
-                if (binding.etSdkAppId.text.isNullOrBlank()) {
-                    binding.etSdkAppId.error = getString(R.string.required_field)
-                    return false
-                }
-
-                if (binding.etSdkSecretKey.text.isNullOrBlank()) {
-                    binding.etSdkSecretKey.error = getString(R.string.required_field)
-                    return false
-                }
-            }
-        }
-
-        return true
     }
 
     private fun getSelectedAudioType(): String {

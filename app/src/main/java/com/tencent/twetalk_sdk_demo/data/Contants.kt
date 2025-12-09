@@ -12,6 +12,7 @@ object Constants {
     const val KEY_LANGUAGE = "language"
     const val KEY_PRODUCT_ID = "product_id"
     const val KEY_DEVICE_NAME = "device_name"
+    const val KEY_DEVICE_SECRET = "device_secret"
     const val KEY_SECRET_ID = "secret_id"
     const val KEY_SECRET_KEY = "secret_key"
     const val KEY_SDK_APP_ID = "sdk_app_id"
