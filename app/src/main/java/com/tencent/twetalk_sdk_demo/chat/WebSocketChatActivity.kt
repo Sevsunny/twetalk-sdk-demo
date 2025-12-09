@@ -7,8 +7,8 @@ import com.tencent.twetalk.core.DefaultTWeTalkClient
 import com.tencent.twetalk.core.TWeTalkClient
 import com.tencent.twetalk.core.TWeTalkClientListener
 import com.tencent.twetalk.core.TWeTalkConfig
-import com.tencent.twetalk.core.TokenProvider
 import com.tencent.twetalk.metrics.MetricEvent
+import com.tencent.twetalk.mqtt.MqttManager
 import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.R
@@ -21,6 +21,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
 
     private lateinit var client: TWeTalkClient
     private lateinit var config: TWeTalkConfig
+    private lateinit var mqttCallback: MqttManager.MqttConnectionCallback
 
     override fun initClient() {
         val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
@@ -30,50 +31,67 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
             finish()
         }
 
-        val secretId = bundle?.getString(Constants.KEY_SECRET_ID, "")
-        val secretKey = bundle?.getString(Constants.KEY_SECRET_KEY, "")
         val productId = bundle?.getString(Constants.KEY_PRODUCT_ID, "")
         val deviceName = bundle?.getString(Constants.KEY_DEVICE_NAME, "")
         val audioType = bundle?.getString(Constants.KEY_AUDIO_TYPE, "PCM")
         val language = bundle?.getString(Constants.KEY_LANGUAGE, "zh")
 
-        val tokenProvider = object : TokenProvider {
-            override fun getToken(): String? {
-                return "xxx"
+        mqttCallback = object : MqttManager.MqttConnectionCallback {
+            override fun onConnected() {
+                // nothing to do
             }
 
-            override fun refreshToken(oldToken: String?): String? {
-                return token
+            override fun onDisconnected(cause: Throwable?) {
+                showToast("设备已断开连接，请尝试重新连接！")
+                finish()
+            }
+
+            override fun onConnectFailed(cause: Throwable?) {
+                // nothing to do
+            }
+
+            override fun onMessageReceived(
+                topic: String?,
+                method: String?,
+                params: Map<String?, Any?>?
+            ) {
+                if (method == MqttManager.REPLY_QUERY_WEBSOCKET_URL) {
+                    val authConfig = TWeTalkConfig.AuthConfig(
+                        productId,
+                        deviceName,
+                        params!!["token"] as String,
+                        audioType,
+                        language
+                    ).apply {
+                        baseUrl = if (isVideoMode) {
+                            "ws://43.144.101.48:7860/ws_vl"
+                        } else {
+                            params["websocket_url"] as String
+                        }
+                    }
+
+                    config = TWeTalkConfig.builder()
+                        .authConfig(authConfig)
+                        .isMetricOpen(true)
+                        .build()
+
+                    client = DefaultTWeTalkClient(config)
+                    client.addListener(this@WebSocketChatActivity)
+                    client.connect()
+                }
             }
         }
 
-        val authConfig = TWeTalkConfig.AuthConfig(
-            secretId,
-            secretKey,
-            productId,
-            deviceName,
-            tokenProvider,
-            audioType,
-            language
-        ).apply {
-            baseUrl = if (isVideoMode) {
-                "ws://43.144.101.48:7860/ws_vl"
-            } else {
-                "ws://iot-twetalk-pre.tencentiotcloud.com/ws"
-            }
-        }
-
-        config = TWeTalkConfig.builder()
-            .authConfig(authConfig)
-            .isMetricOpen(true)
-            .build()
-
-        client = DefaultTWeTalkClient(config)
-        client.addListener(this)
+        mqttManager?.addCallback(mqttCallback)
     }
 
     override fun startChat() {
-        client.connect()
+        val params = mapOf (
+            "connect_type" to MqttManager.WebSocketConnectType.TALK.value,
+            "language" to "en"
+        )
+
+        mqttManager?.queryWebSocketUrl(params)
     }
 
     override fun stopChat() {
@@ -142,6 +160,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        mqttManager?.removeCallback(mqttCallback)
         client.close()
     }
 
@@ -157,12 +176,6 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
             putString(Constants.KEY_AUDIO_TYPE, config.authConfig.audioType)
             putString(Constants.KEY_LANGUAGE, config.authConfig.language)
             putBoolean(Constants.KEY_VIDEO_MODE, isVideoMode)
-        }
-
-        // 密钥
-        securePrefs.edit {
-            putString(Constants.KEY_SECRET_ID, config.authConfig.secretId)
-            putString(Constants.KEY_SECRET_KEY, config.authConfig.secretKey)
         }
     }
 }
