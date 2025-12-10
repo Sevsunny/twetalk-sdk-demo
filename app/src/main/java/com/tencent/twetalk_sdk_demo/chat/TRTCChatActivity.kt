@@ -3,6 +3,7 @@ package com.tencent.twetalk_sdk_demo.chat
 import android.util.Log
 import androidx.core.content.edit
 import com.tencent.twetalk.metrics.MetricEvent
+import com.tencent.twetalk.mqtt.MqttManager
 import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
 import com.tencent.twetalk_sdk_demo.R
@@ -20,39 +21,59 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
 
     private lateinit var client: TWeTalkTRTCClient
     private lateinit var config: TRTCConfig
+    private lateinit var mqttCallback: MqttManager.MqttConnectionCallback
 
     override fun initClient() {
         val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
 
         if (bundle == null) {
-            toast("没有读取到连接配置")
+            showToast("没有读取到连接配置")
             finish()
         }
 
-        val sdkAppId = bundle?.getInt(Constants.KEY_SDK_APP_ID, 0)
-        val sdkSecretKey = bundle?.getString(Constants.KEY_SDK_SECRET_KEY, "")
-        val userId = bundle?.getString(Constants.KEY_USER_ID, "")
-        val productId = bundle?.getString(Constants.KEY_PRODUCT_ID, "")
-        val deviceName = bundle?.getString(Constants.KEY_DEVICE_NAME, "")
         val language = bundle?.getString(Constants.KEY_LANGUAGE, "zh")
 
-        config = TRTCConfig.Builder()
-            .sdkAppId(sdkAppId!!)
-            .sdkSecretKey(sdkSecretKey)
-            .userId(userId)
-            .productId(productId)
-            .deviceName(deviceName)
-            .language(language)
-            .context(this)
-            .useTRTCRecord(false)
-            .build()
+        mqttCallback = object : MqttManager.MqttConnectionCallback {
+            override fun onConnected() {
+                // nothing to do
+            }
 
-        client = DefaultTRTCClient(config)
-        client.addListener(this)
+            override fun onDisconnected(cause: Throwable?) {
+                this@TRTCChatActivity.showToast("设备已断开连接，请尝试重新连接！")
+                finish()
+            }
+
+            override fun onConnectFailed(cause: Throwable?) {
+                // nothing to do
+            }
+
+            override fun onMessageReceived(
+                topic: String?,
+                method: String?,
+                params: Map<String?, Any?>?
+            ) {
+                if (params == null) return
+                if (method == MqttManager.REPLY_QUERY_TRTC_ROOM || method == MqttManager.REPLY_QUERY_TRTC_AI_ROOM) {
+                    config = TRTCConfig(applicationContext).apply {
+                        sdkAppId = params["sdk_app_id"] as String
+                        userId = params["user_id"] as String
+                        userSig = params["user_sig"] as String
+                        privateKey = params["private_key"] as String
+                        roomId = params["room_id"] as String
+                    }
+
+                    client = DefaultTRTCClient(config)
+                    client.addListener(this@TRTCChatActivity)
+                    client.startConversation()
+                }
+            }
+        }
+
+        mqttManager?.addCallback(mqttCallback)
     }
 
     override fun startChat() {
-        client.startConversation()
+        mqttManager?.queryTRTCRoom(null)
     }
 
     override fun stopChat() {
@@ -117,6 +138,7 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
 
     override fun onDestroy() {
         super.onDestroy()
+        mqttManager?.removeCallback(mqttCallback)
         client.destroy()
     }
 
@@ -129,14 +151,7 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
 
         // 其它连接参数信息
         getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).edit {
-            putString(Constants.KEY_USER_ID, config.userId)
             putString(Constants.KEY_LANGUAGE, config.language)
-        }
-
-        // 密钥信息
-        securePrefs.edit {
-            putString(Constants.KEY_SDK_APP_ID, config.sdkAppId.toString())
-            putString(Constants.KEY_SDK_SECRET_KEY, config.sdkSecretKey)
         }
     }
 }

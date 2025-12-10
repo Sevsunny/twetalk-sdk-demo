@@ -2,7 +2,6 @@ package com.tencent.twetalk_sdk_demo.chat
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -21,8 +20,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import com.alibaba.fastjson2.JSON
 import com.alibaba.fastjson2.JSONException
 import com.tencent.twetalk.protocol.ImageMessage
@@ -62,20 +59,6 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     protected var isVideoMode = false
     protected var cameraManager: VideoChatCameraManager? = null
 
-    protected val securePrefs: SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(this)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-
-        EncryptedSharedPreferences.create(
-            this,
-            Constants.KEY_SECRET_INFO_PREF,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
-    }
-
     private var micRecorder: MicRecorder? = null
     @Volatile private var isMicRecorderInitialized = false
 
@@ -96,7 +79,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                     if (!audioGranted) deniedPermissions.add("麦克风")
                     if (!cameraGranted) deniedPermissions.add("摄像头")
 
-                    toast("${deniedPermissions.joinToString("、")}权限被拒绝")
+                    showToast("${deniedPermissions.joinToString("、")}权限被拒绝")
                     finish()
                 }
             }
@@ -106,7 +89,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                     startChat()
                     initMicRecorder()
                 } else {
-                    toast("麦克风权限被拒绝")
+                    showToast("麦克风权限被拒绝")
                     finish()
                 }
             }
@@ -235,10 +218,12 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    protected fun toast(msg: String) = Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-
     private fun initMicRecorder() {
         // TODO 修改适配一下,如果是使用 TRTC 采集音频的情况
+        if (isTRTCConnected()) {
+            return
+        }
+
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val audioConfig = if (audioFormat.equals("OPUS", true)) {
@@ -259,7 +244,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                 Log.e(TAG, "MicRecorder init failed", e)
 
                 lifecycleScope.launch(Dispatchers.Main) {
-                    toast("麦克风初始化失败: ${e.message}")
+                    showToast("麦克风初始化失败: ${e.message}")
                 }
             }
         }
@@ -272,7 +257,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             connectionType = getString(Constants.KEY_CONNECTION_TYPE, "WEBSOCKET")
             audioFormat = getString(Constants.KEY_AUDIO_TYPE, "PCM") ?: "PCM"
         } ?: run {
-            toast("没有读取到配置")
+            showToast("没有读取到配置")
         }
     }
 
@@ -312,7 +297,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private fun setupAudioConnectionInfo() {
         updateConnectState()
 
-        if (connectionType == "TRTC") {
+        if (isTRTCConnected()) {
             binding.chipAudioFormat.isVisible = false
         }
 
@@ -388,7 +373,12 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             toolbar.visibility = View.VISIBLE
             statusBar.visibility = View.VISIBLE
             recyclerViewMessages.visibility = View.VISIBLE
-            audioControlPanel.visibility = View.VISIBLE
+
+            if (isTRTCConnected()) {
+                audioControlPanel.visibility = View.GONE
+            } else {
+                audioControlPanel.visibility = View.VISIBLE
+            }
         }
     }
 
@@ -470,7 +460,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                     Log.e(TAG, "MicRecorder initialization timeout")
 
                     withContext(Dispatchers.Main) {
-                        toast("麦克风初始化超时，请重试")
+                        showToast("麦克风初始化超时，请重试")
                     }
 
                     return@withContext
@@ -486,7 +476,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private fun performRecording() {
         if (micRecorder == null) {
             Log.e(TAG, "MicRecorder is null")
-            toast("麦克风未就绪，请重试")
+            showToast("麦克风未就绪，请重试")
             return
         }
 
@@ -517,14 +507,14 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         isPaused = true
         binding.btnPause.setIconResource(R.drawable.ic_play)
         binding.tvAudioStatus.text = "已暂停"
-        toast("录音已暂停")
+        showToast("录音已暂停")
     }
 
     private fun resumeRecording() {
         isPaused = false
         binding.btnPause.setIconResource(R.drawable.ic_pause)
         binding.tvAudioStatus.text = getString(R.string.listening)
-        toast("录音已恢复")
+        showToast("录音已恢复")
     }
 
     private fun updateRecordingUI(recording: Boolean) {
@@ -657,6 +647,8 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
         return ""
     }
+
+    private fun isTRTCConnected(): Boolean = connectionType == "TRTC"
 
     private fun releaseInternal() {
         isMicRecorderInitialized = false

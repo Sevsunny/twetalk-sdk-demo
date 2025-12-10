@@ -27,7 +27,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         val bundle = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
 
         if (bundle == null) {
-            toast("没有读取到连接配置")
+            showToast("没有读取到连接配置")
             finish()
         }
 

@@ -66,17 +66,8 @@ class DeviceBindActivity : BaseActivity<ActivityDeviceBindBinding>() {
     override fun getViewBinding() = ActivityDeviceBindBinding.inflate(layoutInflater)
 
     override fun initView() {
-        setupToolbar()
         loadSavedDeviceInfo()
         setupBindButton()
-    }
-
-    private fun setupToolbar() {
-        setSupportActionBar(binding.toolbar)
-        supportActionBar?.apply {
-            setDisplayShowTitleEnabled(true)
-            title = getString(R.string.device_bind_title)
-        }
     }
 
     /**
