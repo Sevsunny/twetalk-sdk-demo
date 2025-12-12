@@ -2,6 +2,7 @@ package com.tencent.twetalk_sdk_demo.chat
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -10,7 +11,6 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.animation.Animation
 import android.view.animation.AnimationUtils
-import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
@@ -20,18 +20,25 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
-import com.alibaba.fastjson2.JSON
-import com.alibaba.fastjson2.JSONException
+import com.tencent.twetalk.protocol.AudioFormat
+import com.tencent.twetalk.protocol.CallStream
+import com.tencent.twetalk.protocol.CallSubType
 import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
+import com.tencent.twetalk.protocol.TweCallMessage
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
-import com.tencent.twetalk_sdk_demo.SettingsActivity
 import com.tencent.twetalk_sdk_demo.adapter.ChatMessageAdapter
 import com.tencent.twetalk_sdk_demo.audio.AudioConfig
 import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
 import com.tencent.twetalk_sdk_demo.audio.MicRecorder
 import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
+import com.tencent.twetalk_sdk_demo.call.CallAction
+import com.tencent.twetalk_sdk_demo.call.CallConfigManager
+import com.tencent.twetalk_sdk_demo.call.CallState
+import com.tencent.twetalk_sdk_demo.call.CallType
+import com.tencent.twetalk_sdk_demo.call.WxCallActivity
+import com.tencent.twetalk_sdk_demo.call.WxCallManager
 import com.tencent.twetalk_sdk_demo.data.ChatMessage
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.data.MessageStatus
@@ -41,7 +48,6 @@ import com.tencent.twetalk_sdk_demo.video.VideoChatCameraManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     companion object {
@@ -53,7 +59,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private var isRecording = false
     private var isPaused = false
     private var connectionType: String = ""
-    private var audioFormat: String = ""
+    private var audioFormatStr: String = ""
     protected var isConnected = false
     protected val player = RemotePlayer()
     protected var isVideoMode = false
@@ -61,6 +67,27 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
     private var micRecorder: MicRecorder? = null
     @Volatile private var isMicRecorderInitialized = false
+
+    // 通话状态
+    protected var isCalling = false  // 正在来电/呼叫中
+    protected var isInProgress = false  // 正在通话状态
+    protected var currentCallType: CallType? = null
+    protected var currentCallOpenId: String? = null
+    protected var currentCallNickname: String? = null
+    protected var currentCallRoomId: String? = null
+
+    // 通话页面启动器
+    protected val callActivityLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        // 通话页面返回，重置通话状态
+        isCalling = false
+        isInProgress = false
+        currentCallType = null
+        currentCallOpenId = null
+        currentCallNickname = null
+        currentCallRoomId = null
+    }
 
     protected val reqPermissions = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -154,6 +181,12 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     abstract fun onAudioData(audioData: ByteArray, sampleRate: Int, channels: Int)
     abstract fun onImageCaptured(imgMsg: ImageMessage)
 
+    // 通话相关抽象方法，子类需要实现
+    abstract fun sendDeviceAnswerMessage(roomId: String)
+    abstract fun sendDeviceRejectMessage(roomId: String)
+    abstract fun sendDeviceHangupForIncomingMessage(roomId: String)
+    abstract fun sendDeviceHangupForOutgoingMessage()
+
     protected fun updateConnectState() {
         // 更新状态显示
         lifecycleScope.launch {
@@ -226,7 +259,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val audioConfig = if (audioFormat.equals("OPUS", true)) {
+                val audioConfig = if (audioFormatStr.equals("OPUS", true)) {
                     AudioConfig(chunkMs = 60, formatType = AudioFormatType.OPUS)
                 } else {
 //                    val pcmFile = File(this@BaseChatActivity.getExternalFilesDir(null), "test_${System.currentTimeMillis()}.pcm")
@@ -255,7 +288,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
         bundle?.run {
             connectionType = getString(Constants.KEY_CONNECTION_TYPE, "WEBSOCKET")
-            audioFormat = getString(Constants.KEY_AUDIO_TYPE, "PCM") ?: "PCM"
+            audioFormatStr = getString(Constants.KEY_AUDIO_TYPE, "PCM") ?: "PCM"
         } ?: run {
             showToast("没有读取到配置")
         }
@@ -301,7 +334,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             binding.chipAudioFormat.isVisible = false
         }
 
-        binding.chipAudioFormat.text = audioFormat
+        binding.chipAudioFormat.text = audioFormatStr
         binding.btnEndChat.setOnClickListener {
             stopChat()
         }
@@ -483,12 +516,14 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         isRecording = true
         micRecorder?.start()
 
-        if (!isVideoMode) {
-            updateRecordingUI(true)
-            binding.tvRecordHint.text = getString(R.string.release_to_send)
-            binding.audioVisualizerContainer.visibility = View.VISIBLE
-            binding.tvAudioStatus.text = getString(R.string.listening)
-            animateRecording()
+        if (!isVideoMode && isNotInCall()) {
+            lifecycleScope.launch {
+                updateRecordingUI(true)
+                binding.tvRecordHint.text = getString(R.string.release_to_send)
+                binding.audioVisualizerContainer.visibility = View.VISIBLE
+                binding.tvAudioStatus.text = getString(R.string.listening)
+                animateRecording()
+            }
         }
     }
 
@@ -496,25 +531,33 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         isRecording = false
         micRecorder?.stop()
 
-        if (!isVideoMode) {
-            updateRecordingUI(false)
-            binding.tvRecordHint.text = getString(R.string.hold_to_speak)
-            binding.tvAudioStatus.text = getString(R.string.processing)
+        if (!isVideoMode && isNotInCall()) {
+            lifecycleScope.launch {
+                updateRecordingUI(false)
+                binding.tvRecordHint.text = getString(R.string.hold_to_speak)
+                binding.tvAudioStatus.text = getString(R.string.processing)
+            }
         }
     }
 
     private fun pauseRecording() {
         isPaused = true
-        binding.btnPause.setIconResource(R.drawable.ic_play)
-        binding.tvAudioStatus.text = "已暂停"
-        showToast("录音已暂停")
+
+        if (isNotInCall()) {
+            binding.btnPause.setIconResource(R.drawable.ic_play)
+            binding.tvAudioStatus.text = "已暂停"
+            showToast("录音已暂停")
+        }
     }
 
     private fun resumeRecording() {
         isPaused = false
-        binding.btnPause.setIconResource(R.drawable.ic_pause)
-        binding.tvAudioStatus.text = getString(R.string.listening)
-        showToast("录音已恢复")
+
+        if (isNotInCall()) {
+            binding.btnPause.setIconResource(R.drawable.ic_pause)
+            binding.tvAudioStatus.text = getString(R.string.listening)
+            showToast("录音已恢复")
+        }
     }
 
     private fun updateRecordingUI(recording: Boolean) {
@@ -539,28 +582,39 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    protected fun handleMessage(message: TWeTalkMessage) {
-        when (message.type) {
-            TWeTalkMessage.TWeTalkMessageType.AUDIO_DATA -> {
-                if (message.data is TWeTalkMessage.AudioMessage) {
-                    val audioMsg = message.data as TWeTalkMessage.AudioMessage
-                    val sr = if (audioMsg.sampleRate > 0) audioMsg.sampleRate else 16000
-                    val ch = if (audioMsg.numChannels > 0) audioMsg.numChannels else 1
-                    player.play(audioMsg.audio, sr, ch, audioFormat != "OPUS")
-                }
-            }
+    // ====================== 新的消息处理方法 ====================== //
 
+    /**
+     * 处理音频数据回调
+     */
+    protected fun handleRecvAudio(audio: ByteArray, sampleRate: Int, channels: Int, format: AudioFormat) {
+        // 如果来电或呼叫，先不播放 AI 音频
+        if (isCalling) return
+
+        val sr = if (sampleRate > 0) sampleRate else 16000
+        val ch = if (channels > 0) channels else 1
+        val isPcm = format == AudioFormat.PCM
+        player.play(audio, sr, ch, isPcm)
+    }
+
+    /**
+     * 处理对话消息回调
+     */
+    protected fun handleRecvTalkMessage(type: TWeTalkMessage.TWeTalkMessageType, text: String?) {
+        when (type) {
             TWeTalkMessage.TWeTalkMessageType.BOT_READY -> {}
             TWeTalkMessage.TWeTalkMessageType.ERROR -> {}
+            TWeTalkMessage.TWeTalkMessageType.REQUEST_IMAGE -> {
+                // 服务端请求图片，捕获相机并发送
+                cameraManager?.captureImage()
+            }
 
             TWeTalkMessage.TWeTalkMessageType.USER_LLM_TEXT -> {
                 // 打断机器人的话
                 ConversationManager.interruptAssistant()
                 player.stop()
-
                 // 通知用户对话
-                val text = obtainTextFromTextMessage(message)
-                ConversationManager.onUserLLMText(text)
+                ConversationManager.onUserLLMText(text ?: "")
             }
 
             TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STARTED -> {
@@ -568,8 +622,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             }
 
             TWeTalkMessage.TWeTalkMessageType.BOT_LLM_TEXT -> {
-                val text = obtainTextFromTextMessage(message)
-                ConversationManager.onBotLLMText(text)
+                ConversationManager.onBotLLMText(text ?: "")
             }
 
             TWeTalkMessage.TWeTalkMessageType.BOT_LLM_STOPPED -> {
@@ -593,30 +646,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             }
 
             TWeTalkMessage.TWeTalkMessageType.BOT_TRANSCRIPTION -> {
-//                if (audioFormat == "OPUS") {
-//                    val text = obtainTextFromTextMessage(message)
-//                    ConversationManager.onBotLLMText(text)
-//                }
-            }
-
-            TWeTalkMessage.TWeTalkMessageType.SERVER_MESSAGE -> {
-                if (message.data is String) {
-                    try {
-                        val jsonData = JSON.parseObject(message.data as String)
-                        val type = jsonData.getString("type")
-
-                        // 如果是请求图片则捕获相机并发送一张图片
-                        if (type == "request_image") {
-                            // send image
-                            cameraManager?.captureImage()
-                        }
-                    } catch (e: JSONException) {
-                        Log.e(
-                            TAG,
-                            "handleMessage: unknown json data: ${message.data as String}, error msg: ${e.message}"
-                        )
-                    }
-                }
+                // 暂不处理
             }
 
             // 其余消息根据情况处理
@@ -624,31 +654,229 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_TEXT,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STARTED,
             TWeTalkMessage.TWeTalkMessageType.BOT_TTS_STOPPED -> {
-//                Log.d(TAG, "handleMessage, data: $message")
+                // 暂不处理
             }
         }
     }
 
-    private fun obtainTextFromTextMessage(message: TWeTalkMessage): String {
-        if (message.data is String) {
-            try {
-                val jsonData = JSON.parseObject(message.data as String)
-                val text = jsonData.getString("text")
-                return text
-            } catch (e: JSONException) {
-                Log.e(
-                    TAG,
-                    "handleMessage: unknown json data: ${message.data as String}, error msg: ${e.message}"
-                )
+    /**
+     * 处理通话消息回调
+     */
+    protected fun handleRecvCallMessage(
+        stream: CallStream,
+        subType: CallSubType,
+        data: TweCallMessage.TweCallData
+    ) {
+        Log.d(TAG, "handleRecvCallMessage: stream=$stream, subType=$subType, data=$data")
 
-                return ""
+        when (stream) {
+            CallStream.DEVICE_TO_USER -> {
+                // 设备呼叫小程序的响应
+                handleDeviceToUserMessage(subType, data)
+            }
+            CallStream.USER_TO_DEVICE -> {
+                // 小程序呼叫设备的响应 (通过 WebSocket)
+                handleUserToDeviceMessage(subType, data)
             }
         }
-
-        return ""
     }
 
-    private fun isTRTCConnected(): Boolean = connectionType == "TRTC"
+    /**
+     * 处理设备呼叫小程序时收到的消息
+     */
+    private fun handleDeviceToUserMessage(subType: CallSubType, data: TweCallMessage.TweCallData) {
+        when (subType) {
+            CallSubType.USER_CALLING -> {
+                if (isNotInCall()) {
+                    // 正在呼叫，跳转到呼叫页面
+                    currentCallType = CallType.OUTGOING
+                    currentCallOpenId = data.openId
+                    currentCallNickname = data.called
+                    isCalling = true
+                    launchCallActivity(CallType.OUTGOING, data.called ?: "", data.openId ?: "", "")
+                }
+            }
+
+            CallSubType.USER_ANSWERED -> {
+                // 小程序已接听
+                startRecording()
+                isCalling = false
+                isInProgress = true
+                updateCallState(CallState.IN_PROGRESS)
+            }
+
+            CallSubType.USER_REJECT -> {
+                // 小程序拒接
+                updateCallState(CallState.REJECTED)
+            }
+
+            CallSubType.USER_TIMEOUT -> {
+                // 呼叫超时
+                updateCallState(CallState.TIMEOUT)
+            }
+
+            CallSubType.USER_BUSY -> {
+                // 小程序占线
+                updateCallState(CallState.BUSY)
+            }
+
+            CallSubType.USER_ERROR -> {
+                // 呼叫出错
+                updateCallState(CallState.ERROR)
+            }
+
+            CallSubType.USER_HANGUP -> {
+                // 小程序挂断
+                stopRecording()
+                updateCallState(CallState.ENDED)
+            }
+        }
+    }
+
+    /**
+     * 处理小程序呼叫设备时收到的消息 (通过 WebSocket)
+     */
+    private fun handleUserToDeviceMessage(subType: CallSubType, data: TweCallMessage.TweCallData) {
+        when (subType) {
+            CallSubType.USER_HANGUP -> {
+                // 小程序挂断
+                updateCallState(CallState.ENDED)
+            }
+
+            CallSubType.USER_ANSWERED -> {
+                // 小程序呼叫设备 -> 设备同意时，发现也会同步这条消息
+                isCalling = false
+                isInProgress = true
+            }
+
+            else -> {
+                // 其他类型暂不处理
+            }
+        }
+    }
+
+    /**
+     * 处理来电 (通过 MQTT)
+     */
+    protected fun handleIncomingCall(roomId: String, openId: String) {
+        // 检查是否正在通话中
+        if (!isNotInCall()) {
+            // 设备占线，发送拒接消息
+            sendDeviceRejectMessage(roomId)
+            return
+        }
+
+        // 查找昵称
+        val nickname = CallConfigManager.findNicknameByOpenId(this, openId) ?: ""
+
+        currentCallType = CallType.INCOMING
+        currentCallOpenId = openId
+        currentCallNickname = nickname
+        currentCallRoomId = roomId
+        isCalling = true
+
+        runOnUiThread {
+            launchCallActivity(CallType.INCOMING, nickname, openId, roomId)
+        }
+    }
+
+    /**
+     * 处理小程序取消呼叫 (通过 MQTT)
+     */
+    protected fun handleCallCancelled(roomId: String?) {
+        if (roomId == currentCallRoomId) {
+            updateCallState(CallState.ENDED)
+        }
+    }
+
+    /**
+     * 启动通话页面
+     */
+    private fun launchCallActivity(callType: CallType, nickname: String, openId: String, roomId: String) {
+        val intent = Intent(this, WxCallActivity::class.java).apply {
+            putExtra(Constants.KEY_CALL_BUNDLE, Bundle().apply {
+                putString(Constants.KEY_CALL_TYPE, if (callType == CallType.INCOMING) "incoming" else "outgoing")
+                putString(Constants.KEY_CALL_NICKNAME, nickname)
+                putString(Constants.KEY_CALL_OPEN_ID, openId)
+                putString(Constants.KEY_CALL_ROOM_ID, roomId)
+            })
+        }
+        callActivityLauncher.launch(intent)
+    }
+
+    /**
+     * 更新通话状态
+     */
+    protected fun updateCallState(state: CallState) {
+        WxCallManager.updateCallState(state, currentCallRoomId)
+        Log.d(TAG, "updateCallState: $state")
+
+        if (state == CallState.ENDED || state == CallState.REJECTED ||
+            state == CallState.TIMEOUT || state == CallState.BUSY ||
+            state == CallState.ERROR) {
+            stopRecording()
+            isCalling = false
+            isInProgress = false
+        }
+    }
+
+    /**
+     * 监听通话操作 (从 WxCallActivity 发送)
+     */
+    protected fun observeCallActions() {
+        lifecycleScope.launch {
+            WxCallManager.callActionFlow.collect { event ->
+                handleCallAction(event.action, event.roomId)
+            }
+        }
+    }
+
+    /**
+     * 处理通话操作
+     */
+    private fun handleCallAction(action: CallAction, roomId: String?) {
+        when (action) {
+            CallAction.ANSWER -> {
+                // 接听来电
+                if (roomId != null) {
+                    startRecording()
+                    sendDeviceAnswerMessage(roomId)
+                }
+            }
+
+            CallAction.REJECT -> {
+                // 拒接来电
+                if (roomId != null) {
+                    sendDeviceRejectMessage(roomId)
+                }
+            }
+
+            CallAction.HANGUP -> {
+                // 挂断
+                if (currentCallType == CallType.INCOMING) {
+                    if (roomId != null) {
+                        sendDeviceHangupForIncomingMessage(roomId)
+                    }
+                } else {
+                    sendDeviceHangupForOutgoingMessage()
+                }
+
+                stopRecording()
+            }
+
+            CallAction.MUTE -> {
+                stopRecording()
+            }
+
+            CallAction.UNMUTE -> {
+                startRecording()
+            }
+        }
+    }
+
+    protected fun isNotInCall(): Boolean = !isCalling && !isInProgress
+
+    protected fun isTRTCConnected(): Boolean = connectionType == "TRTC"
 
     private fun releaseInternal() {
         isMicRecorderInitialized = false

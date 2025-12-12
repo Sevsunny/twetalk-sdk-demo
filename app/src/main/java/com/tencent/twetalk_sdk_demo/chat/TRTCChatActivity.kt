@@ -4,8 +4,12 @@ import android.util.Log
 import androidx.core.content.edit
 import com.tencent.twetalk.metrics.MetricEvent
 import com.tencent.twetalk.mqtt.MqttManager
+import com.tencent.twetalk.protocol.AudioFormat
+import com.tencent.twetalk.protocol.CallStream
+import com.tencent.twetalk.protocol.CallSubType
 import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
+import com.tencent.twetalk.protocol.TweCallMessage
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_trtc.config.TRTCConfig
@@ -69,7 +73,7 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
             }
         }
 
-        mqttManager?.addCallback(mqttCallback)
+        mqttManager?.callback = mqttCallback
     }
 
     override fun startChat() {
@@ -77,6 +81,7 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
     }
 
     override fun stopChat() {
+        mqttManager?.callback = null
         client.stopConversation()
     }
 
@@ -93,6 +98,12 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
     override fun onImageCaptured(imgMsg: ImageMessage) {
         throw UnsupportedOperationException("TRTC does not support sending image.")
     }
+
+    // TRTC 模式暂不支持通话功能
+    override fun sendDeviceAnswerMessage(roomId: String) {}
+    override fun sendDeviceRejectMessage(roomId: String) {}
+    override fun sendDeviceHangupForIncomingMessage(roomId: String) {}
+    override fun sendDeviceHangupForOutgoingMessage() {}
 
     override fun onStateChanged(state: TRTCClientState?) {
         when (state) {
@@ -121,8 +132,20 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
         }
     }
 
-    override fun onRecvMessage(message: TWeTalkMessage?) {
-        handleMessage(message!!)
+    override fun onRecvAudio(audio: ByteArray, sampleRate: Int, channels: Int, format: AudioFormat) {
+        handleRecvAudio(audio, sampleRate, channels, format)
+    }
+
+    override fun onRecvTalkMessage(type: TWeTalkMessage.TWeTalkMessageType, text: String?) {
+        handleRecvTalkMessage(type, text)
+    }
+
+    override fun onRecvCallMessage(
+        stream: CallStream,
+        subType: CallSubType,
+        data: TweCallMessage.TweCallData
+    ) {
+        handleRecvCallMessage(stream, subType, data)
     }
 
     override fun onMetrics(metrics: MetricEvent?) {
@@ -138,17 +161,16 @@ class TRTCChatActivity: BaseChatActivity(), TRTCClientListener {
 
     override fun onDestroy() {
         super.onDestroy()
-        mqttManager?.removeCallback(mqttCallback)
         client.destroy()
     }
 
     private fun saveConfig() {
         // 绑定的设备信息
-        getSharedPreferences(Constants.KEY_DEVICE_INFO_PREF, MODE_PRIVATE).edit {
-            putString(Constants.KEY_PRODUCT_ID, config.productId)
-            putString(Constants.KEY_DEVICE_NAME, config.deviceName)
-        }
-
+//        getSharedPreferences(Constants.KEY_DEVICE_INFO_PREF, MODE_PRIVATE).edit {
+//            putString(Constants.KEY_PRODUCT_ID, config.productId)
+//            putString(Constants.KEY_DEVICE_NAME, config.deviceName)
+//        }
+//
         // 其它连接参数信息
         getSharedPreferences(Constants.KEY_CONNECT_PARAMS_PREF, MODE_PRIVATE).edit {
             putString(Constants.KEY_LANGUAGE, config.language)

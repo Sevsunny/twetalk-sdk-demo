@@ -1,8 +1,8 @@
 package com.tencent.twetalk_sdk_demo
 
 import android.content.Intent
-import android.content.SharedPreferences
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.AdapterView
 import androidx.appcompat.app.AlertDialog
@@ -13,6 +13,9 @@ import androidx.preference.PreferenceManager.getDefaultSharedPreferences
 import com.google.android.material.card.MaterialCardView
 import com.tencent.twetalk.core.TWeTalkConfig
 import com.tencent.twetalk.mqtt.MqttManager
+import com.tencent.twetalk_sdk_demo.call.CallConfigActivity
+import com.tencent.twetalk_sdk_demo.call.CallConfigManager
+import com.tencent.twetalk_sdk_demo.call.WxCallOnlyActivity
 import com.tencent.twetalk_sdk_demo.chat.TRTCChatActivity
 import com.tencent.twetalk_sdk_demo.chat.WebSocketChatActivity
 import com.tencent.twetalk_sdk_demo.data.Constants
@@ -53,7 +56,15 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             method: String,
             params: Map<String, Any>
         ) {
-            // 不需要处理
+            Log.d(TAG, "MQTT message received, topic: $topic, method: $method")
+            // 处理 MQTT 在线但 WebSocket 离线时的来电
+            when (method) {
+                MqttManager.RECEIVED_VOIP_JOIN -> {
+                    val roomId = params["roomId"] as? String ?: return
+                    val openId = params["openId"] as? String ?: ""
+                    handleIncomingCallFromMqtt(roomId, openId)
+                }
+            }
         }
     }
 
@@ -80,6 +91,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         // 先注册监听器，再尝试连接
         observeMqttStatus()
         setupDeviceInfo()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        mqttManager?.callback = mqttCallback
     }
 
     /**
@@ -148,7 +164,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
      * 监听 MQTT 连接状态
      */
     private fun observeMqttStatus() {
-        mqttManager?.addCallback(mqttCallback)
+        mqttManager?.callback = mqttCallback
         
         // 初始状态
         val isConnected = mqttManager?.isConnected ?: false
@@ -367,6 +383,11 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
     }
 
     private fun setupNavigationButtons() {
+        binding.btnCallConfig.setOnClickListener {
+            val intent = Intent(this, CallConfigActivity::class.java)
+            startActivity(intent)
+        }
+
         binding.btnAiConfig.setOnClickListener {
             val intent = Intent(this, AiConfigActivity::class.java)
             startActivity(intent)
@@ -381,6 +402,32 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             val intent = Intent(this, HistoryActivity::class.java)
             startActivity(intent)
         }
+    }
+
+    /**
+     * 处理 MQTT 在线但 WebSocket 离线时的来电
+     * 启动 WxCallOnlyActivity 来处理通话
+     */
+    private fun handleIncomingCallFromMqtt(roomId: String, openId: String) {
+        // 查找昵称
+        val nickname = CallConfigManager.findNicknameByOpenId(this, openId) ?: ""
+
+        runOnUiThread {
+            val intent = Intent(this, WxCallOnlyActivity::class.java).apply {
+                putExtra(Constants.KEY_CALL_BUNDLE, Bundle().apply {
+                    putString(Constants.KEY_CALL_TYPE, "incoming")
+                    putString(Constants.KEY_CALL_NICKNAME, nickname)
+                    putString(Constants.KEY_CALL_OPEN_ID, openId)
+                    putString(Constants.KEY_CALL_ROOM_ID, roomId)
+                })
+            }
+            startActivity(intent)
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mqttManager?.callback = null
     }
 
     companion object {

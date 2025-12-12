@@ -155,4 +155,42 @@
     <string name="mqtt_disconnected">MQTT 连接已断开</string>
     <string name="mqtt_connect_failed">MQTT 连接失败</string>
     <string name="mqtt_connect_failed_with_reason">MQTT 连接失败: %1$s</string>
+
+    <!-- 通话配置 -->
+    <string name="call_config">通话配置</string>
+    <string name="call_config_title">通话信息配置</string>
+    <string name="wxa_info">小程序信息</string>
+    <string name="wxa_app_id">小程序 App ID</string>
+    <string name="wxa_model_id">小程序 Model ID</string>
+    <string name="contacts">通讯录</string>
+    <string name="add_contact">添加联系人</string>
+    <string name="edit_contact">编辑联系人</string>
+    <string name="delete_contact">删除联系人</string>
+    <string name="no_contacts">暂无联系人</string>
+    <string name="contact_nickname">昵称</string>
+    <string name="contact_open_id">OpenID</string>
+    <string name="contact_avatar">联系人头像</string>
+    <string name="contact_added">联系人已添加</string>
+    <string name="contact_updated">联系人已更新</string>
+    <string name="contact_deleted">联系人已删除</string>
+    <string name="delete_contact_confirm">确定要删除联系人 "%1$s" 吗？</string>
+    <string name="please_fill_all_fields">请填写所有字段</string>
+    <string name="edit">编辑</string>
+    <string name="delete">删除</string>
+
+    <!-- 通话页面 -->
+    <string name="call_title">语音通话</string>
+    <string name="waiting_answer">等待对方接听...</string>
+    <string name="incoming_call">邀请你语音通话...</string>
+    <string name="call_rejected">对方拒绝接听</string>
+    <string name="call_timeout">对方无人接听</string>
+    <string name="call_busy">对方正在通话中</string>
+    <string name="call_error">呼叫失败</string>
+    <string name="call_ended">通话已结束</string>
+    <string name="call_in_progress">通话中</string>
+    <string name="answer">接听</string>
+    <string name="hangup">挂断</string>
+    <string name="mute">静音</string>
+    <string name="unmute">取消静音</string>
+    <string name="device_busy">设备正忙，无法接听</string>
 </resources>

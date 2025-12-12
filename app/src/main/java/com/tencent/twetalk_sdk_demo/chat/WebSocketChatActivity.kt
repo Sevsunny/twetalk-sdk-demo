@@ -2,6 +2,7 @@ package com.tencent.twetalk_sdk_demo.chat
 
 import android.util.Log
 import androidx.core.content.edit
+import com.alibaba.fastjson2.JSON
 import com.tencent.twetalk.core.ConnectionState
 import com.tencent.twetalk.core.DefaultTWeTalkClient
 import com.tencent.twetalk.core.TWeTalkClient
@@ -9,9 +10,15 @@ import com.tencent.twetalk.core.TWeTalkClientListener
 import com.tencent.twetalk.core.TWeTalkConfig
 import com.tencent.twetalk.metrics.MetricEvent
 import com.tencent.twetalk.mqtt.MqttManager
+import com.tencent.twetalk.protocol.AudioFormat
+import com.tencent.twetalk.protocol.CallStream
+import com.tencent.twetalk.protocol.CallSubType
+import com.tencent.twetalk.protocol.FrameProcessor
 import com.tencent.twetalk.protocol.ImageMessage
 import com.tencent.twetalk.protocol.TWeTalkMessage
+import com.tencent.twetalk.protocol.TweCallMessage
 import com.tencent.twetalk_sdk_demo.R
+import com.tencent.twetalk_sdk_demo.call.CallConfigManager
 import com.tencent.twetalk_sdk_demo.data.Constants
 
 class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
@@ -55,34 +62,49 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                 method: String?,
                 params: Map<String?, Any?>?
             ) {
-                if (method == MqttManager.REPLY_QUERY_WEBSOCKET_URL) {
-                    val authConfig = TWeTalkConfig.AuthConfig(
-                        productId,
-                        deviceName,
-                        params!!["token"] as String,
-                        audioType,
-                        language
-                    ).apply {
-                        baseUrl = if (isVideoMode) {
-                            "ws://43.144.101.48:7860/ws_vl"
-                        } else {
-                            params["websocket_url"] as String
+                when (method) {
+                    MqttManager.REPLY_QUERY_WEBSOCKET_URL -> {
+                        val authConfig = TWeTalkConfig.AuthConfig(
+                            productId,
+                            deviceName,
+                            params!!["token"] as String,
+                            audioType,
+                            language
+                        ).apply {
+                            baseUrl = if (isVideoMode) {
+                                "ws://43.144.101.48:7860/ws_vl"
+                            } else {
+                                params["websocket_url"] as String
+                            }
                         }
+
+                        config = TWeTalkConfig.builder()
+                            .authConfig(authConfig)
+                            .isMetricOpen(true)
+                            .build()
+
+                        client = DefaultTWeTalkClient(config)
+                        client.addListener(this@WebSocketChatActivity)
+                        client.connect()
                     }
 
-                    config = TWeTalkConfig.builder()
-                        .authConfig(authConfig)
-                        .isMetricOpen(true)
-                        .build()
+                    MqttManager.RECEIVED_VOIP_JOIN -> {
+                        // 小程序呼叫设备 (来电)
+                        val roomId = params?.get("roomId") as? String ?: return
+                        val openId = params["openId"] as? String ?: ""
+                        handleIncomingCall(roomId, openId)
+                    }
 
-                    client = DefaultTWeTalkClient(config)
-                    client.addListener(this@WebSocketChatActivity)
-                    client.connect()
+                    MqttManager.RECEIVED_VOIP_CANCEL -> {
+                        // 小程序取消呼叫
+                        val roomId = params?.get("roomId") as? String
+                        handleCallCancelled(roomId)
+                    }
                 }
             }
         }
 
-        mqttManager?.addCallback(mqttCallback)
+        mqttManager?.callback = mqttCallback
     }
 
     override fun startChat() {
@@ -95,20 +117,25 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
     }
 
     override fun stopChat() {
+        mqttManager?.callback = null
         client.disconnect()
     }
 
     override fun onAudioData(audioData: ByteArray, sampleRate: Int, channels: Int) {
-        client.sendCustomAudioData(audioData, sampleRate, channels)
+        if (!isCalling) {
+            client.sendCustomAudioData(audioData, sampleRate, channels)
+        }
     }
 
     override fun onImageCaptured(imgMsg: ImageMessage) {
-        client.sendImage(imgMsg)
+        if (isNotInCall()) {
+            client.sendImage(imgMsg)
+        }
     }
 
-    override fun onStateChanged(state: ConnectionState) {
-//        Log.d(TAG, "onStateChanged: $state")
+    // ====================== TWeTalkClientListener 实现 ====================== //
 
+    override fun onStateChanged(state: ConnectionState) {
         when (state) {
             ConnectionState.IDLE -> {}
             ConnectionState.CONNECTING -> showLoading(true)
@@ -130,6 +157,12 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
 
                 // 保存参数
                 saveConfig()
+
+                // 发送通话配置信息
+                sendTweCallConfig()
+
+                // 监听通话操作
+                observeCallActions()
             }
 
             ConnectionState.RECONNECTING -> showLoading(true, getString(R.string.reconnecting))
@@ -143,8 +176,20 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         }
     }
 
-    override fun onRecvMessage(message: TWeTalkMessage) {
-        handleMessage(message)
+    override fun onRecvAudio(audio: ByteArray, sampleRate: Int, channels: Int, format: AudioFormat) {
+        handleRecvAudio(audio, sampleRate, channels, format)
+    }
+
+    override fun onRecvTalkMessage(type: TWeTalkMessage.TWeTalkMessageType, text: String?) {
+        handleRecvTalkMessage(type, text)
+    }
+
+    override fun onRecvCallMessage(
+        stream: CallStream,
+        subType: CallSubType,
+        data: TweCallMessage.TweCallData
+    ) {
+        handleRecvCallMessage(stream, subType, data)
     }
 
     override fun onMetrics(metrics: MetricEvent?) {
@@ -158,9 +203,35 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         ConversationManager.onSystemMessage("连接出现错误，对话已结束")
     }
 
+    // ====================== 通话消息发送 ====================== //
+
+    override fun sendDeviceAnswerMessage(roomId: String) {
+        val deviceId = CallConfigManager.getDeviceId(this)
+        val msg = FrameProcessor.buildTweCallDeviceAnswerMsg(roomId, deviceId)
+        client.sendCustomMsg(msg)
+    }
+
+    override fun sendDeviceRejectMessage(roomId: String) {
+        val deviceId = CallConfigManager.getDeviceId(this)
+        val msg = FrameProcessor.buildTweCallDeviceRejectMsg(roomId, deviceId)
+        client.sendCustomMsg(msg)
+    }
+
+    override fun sendDeviceHangupForIncomingMessage(roomId: String) {
+        val deviceId = CallConfigManager.getDeviceId(this)
+        val msg = FrameProcessor.buildTweCallDeviceHangupForIncomingMsg(roomId, deviceId)
+        client.sendCustomMsg(msg)
+    }
+
+    override fun sendDeviceHangupForOutgoingMessage() {
+        val msg = FrameProcessor.buildTweCallDeviceHangupForOutgoingMsg()
+        client.sendCustomMsg(msg)
+    }
+
+    // ====================== 私有方法 ====================== //
+
     override fun onDestroy() {
         super.onDestroy()
-        mqttManager?.removeCallback(mqttCallback)
         client.close()
     }
 
@@ -176,6 +247,33 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
             putString(Constants.KEY_AUDIO_TYPE, config.authConfig.audioType)
             putString(Constants.KEY_LANGUAGE, config.authConfig.language)
             putBoolean(Constants.KEY_VIDEO_MODE, isVideoMode)
+        }
+    }
+
+    /**
+     * 发送通话配置信息 (基本通话信息 + 通讯录)
+     */
+    private fun sendTweCallConfig() {
+        try {
+            // 1. 发送基本通话信息
+            val wxaAppId = CallConfigManager.getWxaAppId(this)
+            val wxaModelId = CallConfigManager.getWxaModelId(this)
+            val deviceId = CallConfigManager.getDeviceId(this)
+
+            val basicMsg = FrameProcessor.buildTweCallBasicMsg(wxaAppId, wxaModelId, deviceId)
+            client.sendCustomMsg(basicMsg)
+            Log.d(TAG, "sendTweCallConfig: basic msg sent")
+
+            // 2. 发送通讯录
+            val openIdsList = CallConfigManager.buildOpenIdsList(this)
+            if (openIdsList.isNotEmpty()) {
+                val openIdsJson = JSON.toJSONString(openIdsList)
+                val openIdsMsg = FrameProcessor.buildTweCallOpenidsMsg(openIdsJson)
+                client.sendCustomMsg(openIdsMsg)
+                Log.d(TAG, "sendTweCallConfig: openids msg sent, count=${openIdsList.size}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "sendTweCallConfig error", e)
         }
     }
 }

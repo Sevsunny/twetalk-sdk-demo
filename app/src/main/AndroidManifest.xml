@@ -14,6 +14,7 @@
     <uses-feature android:name="android.hardware.camera.any" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
 
     <application
@@ -67,6 +68,23 @@
             android:name=".AiConfigActivity"
             android:exported="false"
             android:theme="@style/Theme.Twetalksdkdemo" />
+
+        <activity
+            android:name=".call.CallConfigActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Twetalksdkdemo" />
+
+        <activity
+            android:name=".call.WxCallActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.TweTalkSDKDemo.NoActionBar" />
+
+        <activity
+            android:name=".call.WxCallOnlyActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:theme="@style/Theme.TweTalkSDKDemo.NoActionBar" />
 
     </application>
 

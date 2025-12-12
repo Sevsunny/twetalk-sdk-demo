@@ -27,6 +27,15 @@
             android:orientation="horizontal">
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnCallConfig"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:contentDescription="@string/call_config"
+                app:icon="@drawable/ic_call"
+                app:iconTint="@color/white" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnAiConfig"
                 style="@style/Widget.Material3.Button.IconButton"
                 android:layout_width="48dp"

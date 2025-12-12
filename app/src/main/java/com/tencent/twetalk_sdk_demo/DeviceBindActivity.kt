@@ -217,6 +217,9 @@ class DeviceBindActivity : BaseActivity<ActivityDeviceBindBinding>() {
         binding.layoutSuccess.postDelayed({
             val intent = Intent(this, MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            // 在跳转、finish 之前先设置 mqtt 的回调为 null
+            // 否则可能因时序问题导致 MainActivity onResume 在 onDestroy 之后而使 mqtt 回调无法被正确设置
+            mqttManager?.callback = null
             startActivity(intent)
             finish()
         }, 1500)
@@ -225,7 +228,6 @@ class DeviceBindActivity : BaseActivity<ActivityDeviceBindBinding>() {
     override fun onDestroy() {
         super.onDestroy()
         isConnecting = false
-        mqttManager?.removeCallback(mqttCallback)
     }
 
     companion object {

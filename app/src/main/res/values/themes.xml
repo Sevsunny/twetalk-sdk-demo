@@ -16,4 +16,11 @@
         <item name="windowActionBar">false</item>
         <item name="windowNoTitle">true</item>
     </style>
+
+    <!-- 通话页面深色主题 -->
+    <style name="Theme.TweTalkSDKDemo.NoActionBar" parent="Theme.Twetalksdkdemo">
+        <item name="android:windowBackground">@color/call_background</item>
+        <item name="android:statusBarColor">@color/call_background</item>
+        <item name="android:navigationBarColor">@color/call_background</item>
+    </style>
 </resources>
