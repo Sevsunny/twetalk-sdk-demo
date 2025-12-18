@@ -3,6 +3,7 @@ package com.tencent.twetalk_sdk_demo.chat
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -130,6 +131,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             ?.getBoolean(Constants.KEY_VIDEO_MODE) ?: false
 
         loadConnectionInfo()
+        setupRecordButton()
 
         if (isVideoMode) {
             showVideoUI()
@@ -341,16 +343,17 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     private fun setupAudioControls() {
-        setupRecordButton()
+//        setupRecordButton()
         setupControlButtons()
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupRecordButton() {
-        binding.fabRecord.setOnTouchListener { v, event ->
+        val recordListener = View.OnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     if (!isPaused) {
+                        player.stop()
                         startRecording()
                     }
 
@@ -368,6 +371,9 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                 else -> false
             }
         }
+
+        binding.fabRecord.setOnTouchListener(recordListener)
+        binding.videoChat.fabAudioRecord.setOnTouchListener(recordListener)
     }
 
     private fun setupControlButtons() {
@@ -516,13 +522,15 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         isRecording = true
         micRecorder?.start()
 
-        if (!isVideoMode && isNotInCall()) {
-            lifecycleScope.launch {
-                updateRecordingUI(true)
+        lifecycleScope.launch {
+            if (!isVideoMode && isNotInCall()) {
+                updateAudioRecordingUI(true)
                 binding.tvRecordHint.text = getString(R.string.release_to_send)
                 binding.audioVisualizerContainer.visibility = View.VISIBLE
                 binding.tvAudioStatus.text = getString(R.string.listening)
                 animateRecording()
+            } else if (isVideoMode && isNotInCall()) {
+                updateVideoRecordingUI(true)
             }
         }
     }
@@ -531,11 +539,13 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         isRecording = false
         micRecorder?.stop()
 
-        if (!isVideoMode && isNotInCall()) {
-            lifecycleScope.launch {
-                updateRecordingUI(false)
+        lifecycleScope.launch {
+            if (!isVideoMode && isNotInCall()) {
+                updateAudioRecordingUI(false)
                 binding.tvRecordHint.text = getString(R.string.hold_to_speak)
                 binding.tvAudioStatus.text = getString(R.string.processing)
+            } else if (isVideoMode && isNotInCall()) {
+                updateVideoRecordingUI(false)
             }
         }
     }
@@ -560,7 +570,25 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    private fun updateRecordingUI(recording: Boolean) {
+    private fun updateVideoRecordingUI(recording: Boolean) {
+        if (recording) {
+            binding.videoChat.fabAudioRecord.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.error_red)
+            binding.videoChat.fabAudioRecord.setImageResource(R.drawable.ic_mic_recording)
+
+            val color = ContextCompat.getColor(this, R.color.white)
+            binding.videoChat.fabAudioRecord.setImageTintList(ColorStateList.valueOf(color))
+        } else {
+            binding.videoChat.fabAudioRecord.backgroundTintList =
+                ContextCompat.getColorStateList(this, R.color.white)
+            binding.videoChat.fabAudioRecord.setImageResource(R.drawable.ic_mic)
+
+            val color = ContextCompat.getColor(this, R.color.primary_blue)
+            binding.videoChat.fabAudioRecord.setImageTintList(ColorStateList.valueOf(color))
+        }
+    }
+
+    private fun updateAudioRecordingUI(recording: Boolean) {
         if (recording) {
             binding.fabRecord.backgroundTintList = 
                 ContextCompat.getColorStateList(this, R.color.error_red)
@@ -584,12 +612,20 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
     // ====================== 新的消息处理方法 ====================== //
 
+    private var isFirstAudioFrameArrived = false
+
     /**
      * 处理音频数据回调
      */
     protected fun handleRecvAudio(audio: ByteArray, sampleRate: Int, channels: Int, format: AudioFormat) {
+        if (isRecording) return
         // 如果来电或呼叫，先不播放 AI 音频
         if (isCalling) return
+
+        if (!isNotInCall() && !isFirstAudioFrameArrived) {
+            Log.i(TAG, "通话时第一帧音频到达")
+            isFirstAudioFrameArrived = true
+        }
 
         val sr = if (sampleRate > 0) sampleRate else 16000
         val ch = if (channels > 0) channels else 1
@@ -837,6 +873,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private fun handleCallAction(action: CallAction, roomId: String?) {
         when (action) {
             CallAction.ANSWER -> {
+                Log.i(TAG, "接听")
                 // 接听来电
                 if (roomId != null) {
                     startRecording()
