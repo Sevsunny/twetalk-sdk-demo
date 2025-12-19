@@ -71,10 +71,12 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                             audioType,
                             language
                         ).apply {
+                            val url = params["websocket_url"] as String
+
                             baseUrl = if (isVideoMode) {
-                                "ws://43.144.101.48:7860/ws_vl"
+                                "${url}_vl"
                             } else {
-                                params["websocket_url"] as String
+                                url
                             }
                         }
 
