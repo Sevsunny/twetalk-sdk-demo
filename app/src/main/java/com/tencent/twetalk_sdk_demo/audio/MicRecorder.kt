@@ -3,16 +3,14 @@ package com.tencent.twetalk_sdk_demo.audio
 import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
-import android.media.MediaCodec
-import android.media.MediaFormat
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
-import android.os.Build
 import android.util.Log
 import com.tencent.twetalk.audio.OpusBridge
 import com.tencent.twetalk.audio.model.OpusEncoderParams
+import com.tencent.twetalk.util.PcmUtil
 
 /**
  * 音频采集
@@ -35,9 +33,9 @@ class MicRecorder(
     private var ns: NoiseSuppressor? = null
     
     // Opus 编码器
-    private var opusEncoder: MediaCodec? = null
-    private var opusBridge: OpusBridge? = null
-    
+    private var opusEncoderHandle: Long = 0
+    private val opusBridge = OpusBridge.getInstance()
+
     // 文件写入器
     private var fileWriter: AudioFileWriter? = null
     
@@ -78,14 +76,9 @@ class MicRecorder(
             
             // 初始化编码器（如果需要）
             if (config.formatType == AudioFormatType.OPUS) {
-                initOpusBridge()
-//                if (AudioCapabilityDetector.isOpusSupported()) {
-//                    initOpusEncoder()
-//                } else {
-//                    initOpusBridge()
-//                }
+                initOpusEncoder()
             }
-            
+
             // 初始化文件写入器（如果需要）
             if (config.saveToFile && config.filePath != null) {
                 fileWriter = AudioFileWriter(config.filePath)
@@ -286,52 +279,34 @@ class MicRecorder(
      * 初始化 Opus 编码器
      */
     private fun initOpusEncoder() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
-            throw UnsupportedOperationException("Opus 编码需要 Android 5.0 (API 21) 及以上版本")
-        }
-
         try {
-            // 创建 Opus 编码器
-            opusEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_AUDIO_OPUS)
-            
-            // 配置编码器
-            val format = MediaFormat.createAudioFormat(
-                MediaFormat.MIMETYPE_AUDIO_OPUS,
-                config.sampleRate,
-                config.channelCount
-            ).apply {
-                setInteger(MediaFormat.KEY_BIT_RATE, AudioConfig.OpusConfig.BITRATE)
-                setInteger(MediaFormat.KEY_MAX_INPUT_SIZE, frameBytes)
-                
-                // Opus 特定配置：60ms 一帧
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    setInteger(
-                        MediaFormat.KEY_PCM_ENCODING,
-                        if (config.bitDepth == 16) AudioFormat.ENCODING_PCM_16BIT else AudioFormat.ENCODING_PCM_8BIT
-                    )
-                }
+            val params = OpusEncoderParams.Builder()
+                .sampleRate(config.sampleRate)
+                .channels(config.channelCount)
+                .targetBytes(AudioConfig.OpusConfig.TARGET_BYTES)
+                .bitrate(AudioConfig.OpusConfig.BITRATE)
+                .cbr(true)
+                .dtx(false)
+                .complexity(5)
+                .signalVoice(true)
+                .build()
+
+            opusEncoderHandle = opusBridge.createEncoder(params)
+
+            if (opusEncoderHandle == 0L) {
+                throw UnsupportedOperationException("OpusEncoder 创建失败")
             }
-            
-            opusEncoder?.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            opusEncoder?.start()
-            
-            Log.i(TAG, "Opus 编码器初始化成功: bitrate=${AudioConfig.OpusConfig.BITRATE}, " +
-                    "frameDuration=${AudioConfig.OpusConfig.FRAME_DURATION_MS}ms")
-            
+
+            Log.i(TAG, "==== OpusEncoder Init Success ====")
+            Log.i(TAG, "Handle: ${opusEncoderHandle}\n" +
+                    "Sample Rate: ${config.sampleRate}\n" +
+                    "Channels: ${config.channelCount}\n" +
+                    "Bitrate: ${AudioConfig.OpusConfig.BITRATE}\n" +
+                    "Target Bytes: ${AudioConfig.OpusConfig.TARGET_BYTES}\n" +
+                    "Frame Ms: ${AudioConfig.OpusConfig.FRAME_DURATION_MS}\n")
         } catch (e: Exception) {
-            throw UnsupportedOperationException("Opus 编码器初始化失败", e)
+            throw UnsupportedOperationException("OpusEncoder 初始化失败", e)
         }
-    }
-
-    private fun initOpusBridge() {
-        opusBridge = OpusBridge.getInstance()
-
-        opusBridge?.initEncoder(OpusEncoderParams.Builder()
-            .sampleRate(config.sampleRate)
-            .channels(config.channelCount)
-            .bitrate(AudioConfig.OpusConfig.BITRATE)
-            .build()
-        )
     }
 
     /**
@@ -384,7 +359,7 @@ class MicRecorder(
 
                 AudioFormatType.OPUS -> {
                     // Opus 格式需要编码
-                    encodeToOpusByMediaCodec(pcmData) ?: encodeToOpusByOpusBridge(pcmData)
+                    encodeToOpus(pcmData)
                 }
             }
             
@@ -402,52 +377,21 @@ class MicRecorder(
     }
 
     /**
-     * 使用 MediaCodec 将 PCM 编码为 Opus 格式
+     * 编码 PCM 为 Opus
      */
-    private fun encodeToOpusByMediaCodec(pcmData: ByteArray): ByteArray? {
-        val encoder = opusEncoder ?: return null
-        
-        try {
-            // 获取输入缓冲区
-            val inputBufferIndex = encoder.dequeueInputBuffer(10000)
+    private fun encodeToOpus(pcmData: ByteArray): ByteArray? {
+        if (opusEncoderHandle == 0L) {
+            Log.e(TAG, "OpusEncoder isn't init!")
+            return null
+        }
 
-            if (inputBufferIndex >= 0) {
-                val inputBuffer = encoder.getInputBuffer(inputBufferIndex)
-                inputBuffer?.clear()
-                inputBuffer?.put(pcmData)
-                
-                encoder.queueInputBuffer(
-                    inputBufferIndex,
-                    0,
-                    pcmData.size,
-                    System.nanoTime() / 1000,
-                    0
-                )
-            }
-            
-            // 获取输出缓冲区
-            val bufferInfo = MediaCodec.BufferInfo()
-            val outputBufferIndex = encoder.dequeueOutputBuffer(bufferInfo, 10000)
-            
-            if (outputBufferIndex >= 0) {
-                val outputBuffer = encoder.getOutputBuffer(outputBufferIndex)
-                val opusData = ByteArray(bufferInfo.size)
-                outputBuffer?.get(opusData)
-                
-                encoder.releaseOutputBuffer(outputBufferIndex, false)
-                
-                return opusData
-            }
-            
+        try {
+            val shorts = PcmUtil.byteToShort(pcmData)
+            return opusBridge.encode(opusEncoderHandle, shorts)
         } catch (e: Exception) {
             Log.e(TAG, "Opus 编码失败", e)
+            return null
         }
-        
-        return null
-    }
-
-    private fun encodeToOpusByOpusBridge(pcmData: ByteArray): ByteArray? {
-        return opusBridge?.encode(pcmData)
     }
 
     /**
@@ -477,16 +421,10 @@ class MicRecorder(
         }
         
         // 释放 Opus 编码器
-        try {
-            opusEncoder?.stop()
-            opusEncoder?.release()
-            opusEncoder = null
-        } catch (e: Exception) {
-            Log.e(TAG, "释放 Opus 编码器失败", e)
+        if (opusEncoderHandle != 0L) {
+            opusBridge.releaseEncoder(opusEncoderHandle)
+            opusEncoderHandle = 0
         }
-
-        opusBridge?.releaseEncoder()
-        opusBridge = null
         
         // 释放 AudioRecord
         try {

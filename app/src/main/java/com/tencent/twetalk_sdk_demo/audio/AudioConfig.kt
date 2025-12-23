@@ -28,7 +28,7 @@ data class AudioConfig(
      */
     object OpusConfig {
         const val FRAME_DURATION_MS = 60    // 60ms 一帧
-        const val FRAME_SIZE_BYTES = 180    // 180 字节一帧
+        const val TARGET_BYTES = 180        // 180 字节一帧
         const val BITRATE = 24000           // 比特率 24kbps
     }
     

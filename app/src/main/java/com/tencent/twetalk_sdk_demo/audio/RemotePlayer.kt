@@ -5,13 +5,11 @@ import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
 import com.tencent.twetalk.audio.OpusBridge
-import com.tencent.twetalk.audio.model.OpusEncoderParams
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * 简易的 PCM 16-bit 播放器（小端）
- * TODO OPUS 解码
+ * 简易播放器
  */
 class RemotePlayer {
     private val TAG = "RemotePlayer"
@@ -23,35 +21,48 @@ class RemotePlayer {
     private var currentSr = 0
     private var currentCh = 0
     private val started = AtomicBoolean(false)
+
+    // Opus 解码器
+    private var opusDecoderHandle: Long = 0
     private val opusBridge = OpusBridge.getInstance()
-    private var isOpusInitialed = false
+
 
     fun play(audio: ByteArray, sampleRate: Int, channels: Int, isPCM: Boolean = true) {
         executor.execute {
             ensureTrack(sampleRate, channels, isPCM)
 
-            if (!isPCM && isOpusInitialed) {
-                val pcmOut = ShortArray(OpusBridge.frameSamples(sampleRate) * channels)
-                val samples = opusBridge.decode(audio, pcmOut)
-
-                if (samples > 0 && track?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                    track?.write(pcmOut, 0, pcmOut.size, AudioTrack.WRITE_BLOCKING)
+            if (!isPCM) {
+                // Opus 解码为 PCM
+                if (opusDecoderHandle == 0L) {
+                    Log.e(TAG, "OpusDecoder handle not initialized")
+                    return@execute
                 }
-            }
 
-            if (isPCM && track?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                track?.write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
+                val frameSamples = opusBridge.getFrameSamples(opusDecoderHandle, false) * channels
+                val pcmOut = ShortArray(frameSamples)
+                val samplesPerCh = opusBridge.decode(opusDecoderHandle, audio, pcmOut, false)
+
+                if (samplesPerCh > 0 && track?.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    val samples = samplesPerCh * channels
+                    track?.write(pcmOut, 0, samples, AudioTrack.WRITE_BLOCKING)
+                }
+            } else {
+                // PCM 直接写入
+                if (track?.playState == AudioTrack.PLAYSTATE_PLAYING) {
+                    track?.write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
+                }
             }
         }
     }
 
     private fun ensureTrack(sr: Int, ch: Int, isPCM: Boolean) {
-        if (!isPCM && !isOpusInitialed) {
-            initOpus(sr, ch)
-
-            if (!isOpusInitialed) {
-                throw RuntimeException("Opus 解码器初始化失败")
-            }
+        // 检查是否需要重建 decoder
+        if (!isPCM && opusDecoderHandle == 0L) {
+            initOpusDecoder(sr, ch)
+        } else if (!isPCM && (currentSr != sr || currentCh != ch)) {
+            // 参数变化，重建 decoder
+            releaseOpusDecoder()
+            initOpusDecoder(sr, ch)
         }
 
         if (track != null && track?.state == AudioTrack.STATE_INITIALIZED && sr == currentSr && ch == currentCh) {
@@ -64,21 +75,11 @@ class RemotePlayer {
             } catch (e: IllegalStateException) {
                 Log.e(TAG, "ensureTrack: play error ${e.message}")
             }
-
             return
         }
 
-        // 需要重建或首次创建
+        // 重建 track
         releaseInternal()
-
-        // 使用 opus 时重新 init
-        if (!isPCM && isOpusInitialed) {
-            initOpus(sr, ch)
-
-            if (!isOpusInitialed) {
-                return
-            }
-        }
 
         currentSr = sr
         currentCh = ch
@@ -86,11 +87,11 @@ class RemotePlayer {
         val channelOut = when (ch) {
             1 -> AudioFormat.CHANNEL_OUT_MONO
             2 -> AudioFormat.CHANNEL_OUT_STEREO
-            else -> AudioFormat.CHANNEL_OUT_MONO // 不支持的声道数时回退为单声道
+            else -> AudioFormat.CHANNEL_OUT_MONO
         }
 
         val minBuf = AudioTrack.getMinBufferSize(sr, channelOut, AudioFormat.ENCODING_PCM_16BIT)
-        val bufferSize = maxOf(minBuf, sr * ch * 2 / 10) // 预留约 100ms buffer
+        val bufferSize = maxOf(minBuf, sr * ch * 2 / 10)
 
         track = AudioTrack(
             AudioManager.STREAM_MUSIC,
@@ -104,22 +105,26 @@ class RemotePlayer {
         started.set(true)
     }
 
-    private fun initOpus(sr: Int, ch: Int) {
-        val encoderRes = opusBridge.initEncoder(
-            OpusEncoderParams.Builder()
-                .sampleRate(sr)
-                .channels(ch)
-                .build()
-        )
+    private fun initOpusDecoder(sr: Int, ch: Int) {
+        try {
+            opusDecoderHandle = opusBridge.createDecoder(sr, ch)
 
-        val decoderRes = opusBridge.initDecoder(sr, ch)
+            if (opusDecoderHandle == 0L) {
+                Log.e(TAG, "OpusDecoder 创建失败")
+                return
+            }
 
-        if (!decoderRes || !encoderRes) {
-            Log.e(TAG, "OpusBridge 初始化失败")
-            return
+            Log.i(TAG, "OpusDecoder 初始化成功: sr=$sr, ch=$ch")
+        } catch (e: Exception) {
+            Log.e(TAG, "OpusDecoder 初始化失败", e)
         }
+    }
 
-        isOpusInitialed = true
+    private fun releaseOpusDecoder() {
+        if (opusDecoderHandle != 0L) {
+            opusBridge.releaseDecoder(opusDecoderHandle)
+            opusDecoderHandle = 0
+        }
     }
 
     fun stop() {
@@ -145,11 +150,7 @@ class RemotePlayer {
         currentSr = 0
         currentCh = 0
 
-        try {
-            opusBridge.releaseEncoder()
-            opusBridge.releaseDecoder()
-            isOpusInitialed = false
-        } catch (_: Throwable) {}
+        releaseOpusDecoder()
     }
 
     fun release() = executor.execute { releaseInternal() }
