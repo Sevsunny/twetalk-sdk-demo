@@ -3,8 +3,6 @@ package com.tencent.twetalk_sdk_demo.call
 import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -12,11 +10,14 @@ import android.view.View
 import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.databinding.ActivityWxCallBinding
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -42,13 +43,7 @@ class WxCallActivity : BaseActivity<ActivityWxCallBinding>() {
 
     // 通话计时
     private var callStartTime: Long = 0
-    private val timerHandler = Handler(Looper.getMainLooper())
-    private val timerRunnable = object : Runnable {
-        override fun run() {
-            updateCallDuration()
-            timerHandler.postDelayed(this, 1000)
-        }
-    }
+    private var timerJob: Job? = null
 
     override fun getViewBinding() = ActivityWxCallBinding.inflate(layoutInflater)
 
@@ -253,7 +248,6 @@ class WxCallActivity : BaseActivity<ActivityWxCallBinding>() {
     private fun handleAnswer() {
         if (callState == CallState.INCOMING) {
             WxCallManager.sendCallAction(CallAction.ANSWER, roomId)
-            callState = CallState.IN_PROGRESS
             updateUIForState()
         }
     }
@@ -308,12 +302,26 @@ class WxCallActivity : BaseActivity<ActivityWxCallBinding>() {
     }
 
     private fun startCallTimer() {
+        lifecycleScope.launch {
+            binding.tvStatus.text = "00:00"
+        }
+
         callStartTime = System.currentTimeMillis()
-        timerHandler.post(timerRunnable)
+
+        if (timerJob == null) {
+            timerJob = lifecycleScope.launch {
+                while (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    updateCallDuration()
+                    delay(1000)
+                }
+            }
+        }
+
+        timerJob!!.start()
     }
 
     private fun stopCallTimer() {
-        timerHandler.removeCallbacks(timerRunnable)
+        timerJob?.cancel()
     }
 
     private fun updateCallDuration() {
@@ -324,14 +332,16 @@ class WxCallActivity : BaseActivity<ActivityWxCallBinding>() {
     }
 
     private fun scheduleAutoFinish() {
-        timerHandler.postDelayed({
+        lifecycleScope.launch {
+            delay(AUTO_FINISH_DELAY)
             finish()
-        }, AUTO_FINISH_DELAY)
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         stopCallTimer()
+        timerJob = null
         stopVibration()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }

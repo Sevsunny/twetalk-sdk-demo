@@ -4,8 +4,6 @@ import android.Manifest
 import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -15,6 +13,7 @@ import android.view.WindowManager
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.tencent.twetalk.core.ConnectionState
 import com.tencent.twetalk.core.DefaultTWeTalkClient
@@ -32,13 +31,14 @@ import com.tencent.twetalk.transport.WebSocketTransport
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.audio.AudioConfig
-import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
 import com.tencent.twetalk_sdk_demo.audio.MicRecorder
 import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.databinding.ActivityWxCallBinding
 import com.tencent.twetalk_sdk_demo.utils.PermissionHelper
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.Locale
 
@@ -80,13 +80,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     // 通话计时
     private var callStartTime: Long = 0
-    private val timerHandler = Handler(Looper.getMainLooper())
-    private val timerRunnable = object : Runnable {
-        override fun run() {
-            updateCallDuration()
-            timerHandler.postDelayed(this, 1000)
-        }
-    }
+    private var timerJob: Job? = null
 
     // 权限请求
     private val reqPermissions = registerForActivityResult(
@@ -270,8 +264,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     private fun handleWebSocketUrlReply(params: Map<String?, Any?>?) {
         val token = params?.get("token") as? String
-//        val websocketUrl = params?.get("websocket_url") as? String
-        val websocketUrl = "ws://43.144.104.72:7860/ws_voip"
+        val websocketUrl = params?.get("websocket_url") as? String
+//        val websocketUrl = "ws://43.144.104.72:7860/ws_voip"
 
         if (token.isNullOrEmpty() || websocketUrl.isNullOrEmpty()) {
             runOnUiThread {
@@ -300,7 +294,6 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             .roomId(roomId)
             .appId(appId)
             .modelId(modelId)
-            .audioType("PCM")
             .response("answer")  // 接听
             .build()
 
@@ -309,7 +302,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             productId,
             deviceName,
             token,
-            "PCM",
+            "opus",
             "zh"
         )
 
@@ -354,8 +347,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     private fun handleWebSocketUrlReplyForReject(params: Map<String?, Any?>?) {
         val token = params?.get("token") as? String
-//        val websocketUrl = params?.get("websocket_url") as? String
-        val websocketUrl = "ws://43.144.104.72:7860/ws_voip"
+        val websocketUrl = params?.get("websocket_url") as? String
+//        val websocketUrl = "ws://43.144.104.72:7860/ws_voip"
 
         if (token.isNullOrEmpty() || websocketUrl.isNullOrEmpty()) {
             runOnUiThread {
@@ -383,7 +376,6 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             .roomId(roomId)
             .appId(appId)
             .modelId(modelId)
-            .audioType("PCM")
             .response("reject")  // 拒接
             .build()
 
@@ -392,7 +384,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
             productId,
             deviceName,
             token,
-            "PCM",
+            "opus",
             "zh"
         )
 
@@ -451,14 +443,12 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
                 startVibration()
             }
             CallState.IN_PROGRESS -> {
-                binding.tvStatus.text = "00:00"
                 binding.layoutAnswer.visibility = View.GONE
                 binding.layoutMute.visibility = View.VISIBLE
                 binding.layoutHangup.visibility = View.VISIBLE
                 enableButtons(true)
                 stopVibration()
                 updateMuteUI()
-                startCallTimer()
                 startRecording()
             }
             CallState.REJECTED, CallState.TIMEOUT, CallState.BUSY, CallState.ERROR -> {
@@ -523,12 +513,26 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     }
 
     private fun startCallTimer() {
+        lifecycleScope.launch {
+            binding.tvStatus.text = "00:00"
+        }
+
         callStartTime = System.currentTimeMillis()
-        timerHandler.post(timerRunnable)
+
+        if (timerJob == null) {
+            timerJob = lifecycleScope.launch {
+                while (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
+                    updateCallDuration()
+                    delay(1000)
+                }
+            }
+        }
+
+        timerJob!!.start()
     }
 
     private fun stopCallTimer() {
-        timerHandler.removeCallbacks(timerRunnable)
+        timerJob?.cancel()
     }
 
     private fun updateCallDuration() {
@@ -539,9 +543,10 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     }
 
     private fun scheduleAutoFinish() {
-        timerHandler.postDelayed({
+        lifecycleScope.launch {
+            delay(AUTO_FINISH_DELAY)
             selfFinish()
-        }, AUTO_FINISH_DELAY)
+        }
     }
 
     private fun selfFinish() {
@@ -561,6 +566,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
                     callState = CallState.IN_PROGRESS
                     updateUIForState()
                 }
+
                 ConnectionState.CLOSED -> {
                     isWebSocketConnected = false
                     if (callState == CallState.IN_PROGRESS || callState == CallState.INCOMING) {
@@ -577,6 +583,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     override fun onRecvAudio(audio: ByteArray, sampleRate: Int, channels: Int, format: AudioFormat) {
         if (!isFirstAudioFrameArrive) {
             isFirstAudioFrameArrive = true
+            startCallTimer()
         }
 
         val sr = if (sampleRate > 0) sampleRate else 16000
@@ -607,7 +614,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     override fun onDestroy() {
         super.onDestroy()
-        timerHandler.removeCallbacksAndMessages(null)
+        timerJob?.cancel()
+        timerJob = null
         stopRecording()
         stopVibration()
         player.release()

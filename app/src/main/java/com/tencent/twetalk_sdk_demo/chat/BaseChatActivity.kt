@@ -582,8 +582,6 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    // ====================== 新的消息处理方法 ====================== //
-
     /**
      * 处理音频数据回调
      */
@@ -692,7 +690,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                     currentCallType = CallType.OUTGOING
                     currentCallOpenId = data.openId
                     currentCallNickname = data.called
-                    isCalling = true
+                    updateCallState(CallState.CALLING)
                     launchCallActivity(CallType.OUTGOING, data.called ?: "", data.openId ?: "", "")
                 }
             }
@@ -700,8 +698,6 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             CallSubType.USER_ANSWERED -> {
                 // 小程序已接听
                 startRecording()
-                isCalling = false
-                isInProgress = true
                 updateCallState(CallState.IN_PROGRESS)
             }
 
@@ -727,7 +723,6 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
             CallSubType.USER_HANGUP -> {
                 // 小程序挂断
-                stopRecording()
                 updateCallState(CallState.ENDED)
             }
         }
@@ -745,8 +740,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
             CallSubType.USER_ANSWERED -> {
                 // 小程序呼叫设备 -> 设备同意时，发现也会同步这条消息
-                isCalling = false
-                isInProgress = true
+                updateCallState(CallState.IN_PROGRESS)
             }
 
             else -> {
@@ -773,7 +767,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         currentCallOpenId = openId
         currentCallNickname = nickname
         currentCallRoomId = roomId
-        isCalling = true
+        updateCallState(CallState.INCOMING)
 
         runOnUiThread {
             launchCallActivity(CallType.INCOMING, nickname, openId, roomId)
@@ -811,12 +805,25 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         WxCallManager.updateCallState(state, currentCallRoomId)
         Log.d(TAG, "updateCallState: $state")
 
-        if (state == CallState.ENDED || state == CallState.REJECTED ||
-            state == CallState.TIMEOUT || state == CallState.BUSY ||
-            state == CallState.ERROR) {
-            stopRecording()
-            isCalling = false
-            isInProgress = false
+        when (state) {
+            CallState.IDLE -> {}
+
+            CallState.CALLING, CallState.INCOMING -> {
+                isCalling = true
+                isInProgress = false
+            }
+
+            CallState.IN_PROGRESS -> {
+                isCalling = false
+                isInProgress = true
+            }
+
+            CallState.REJECTED, CallState.TIMEOUT,
+            CallState.BUSY, CallState.ERROR, CallState.ENDED -> {
+                stopRecording()
+                isCalling = false
+                isInProgress = false
+            }
         }
     }
 

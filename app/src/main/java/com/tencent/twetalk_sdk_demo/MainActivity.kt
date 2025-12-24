@@ -232,7 +232,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 // WebSocket 其它参数反向渲染
                 val audioType = this.getString(Constants.KEY_AUDIO_TYPE, "PCM")
 
-                if (audioType == "OPUS") {
+                if (audioType == "opus") {
                     rbOpus.isChecked = true
                     rbPCM.isChecked = false
                 } else {
