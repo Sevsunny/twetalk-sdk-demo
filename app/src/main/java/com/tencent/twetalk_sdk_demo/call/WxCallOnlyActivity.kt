@@ -232,7 +232,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val audioConfig = AudioConfig()
-                micRecorder = MicRecorder(audioConfig) { audioData ->
+                micRecorder = MicRecorder(this@WxCallOnlyActivity, audioConfig) { audioData ->
                     if (isWebSocketConnected && callState == CallState.IN_PROGRESS) {
                         client?.sendCustomAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
                     }

@@ -1,10 +1,13 @@
 package com.tencent.twetalk_sdk_demo.audio
 
+import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import android.os.Process
 import android.util.Log
 import com.tencent.twetalk.audio.OpusBridge
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -14,7 +17,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 class RemotePlayer {
     private val TAG = "RemotePlayer"
     private val executor = Executors.newSingleThreadExecutor { r ->
-        Thread(r, "RemotePlayer").apply { isDaemon = true }
+        Thread({
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
+            } catch (_: Throwable) {}
+            r.run()
+        }, "RemotePlayer").apply { isDaemon = true }
     }
 
     private var track: AudioTrack? = null
@@ -25,14 +33,16 @@ class RemotePlayer {
     // Opus 解码器
     private var opusDecoderHandle: Long = 0
     private val opusBridge = OpusBridge.getInstance()
+    private var lastWriteCostMs = 0L
+    private val pcmQueue = ConcurrentLinkedQueue<ByteArray>()
+    private val maxQueueBytes = 16000 / 50 * 2 * 5 // 约 100ms * 5 = 500ms 容量（16k单声道16bit）
 
 
     fun play(audio: ByteArray, sampleRate: Int, channels: Int, isPCM: Boolean = true) {
         executor.execute {
             ensureTrack(sampleRate, channels, isPCM)
 
-            if (!isPCM) {
-                // Opus 解码为 PCM
+            val pcmBytes: ByteArray = if (!isPCM) {
                 if (opusDecoderHandle == 0L) {
                     Log.e(TAG, "OpusDecoder handle not initialized")
                     return@execute
@@ -42,16 +52,32 @@ class RemotePlayer {
                 val pcmOut = ShortArray(frameSamples)
                 val samplesPerCh = opusBridge.decode(opusDecoderHandle, audio, pcmOut, false)
 
-                if (samplesPerCh > 0 && track?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                    val samples = samplesPerCh * channels
-                    track?.write(pcmOut, 0, samples, AudioTrack.WRITE_BLOCKING)
+                if (samplesPerCh <= 0) {
+                    return@execute
                 }
+
+                // short[] -> byte[]
+                val samples = samplesPerCh * channels
+                val out = ByteArray(samples * 2)
+                var idx = 0
+                for (i in 0 until samples) {
+                    val v = pcmOut[i].toInt()
+                    out[idx++] = (v and 0xFF).toByte()
+                    out[idx++] = ((v ushr 8) and 0xFF).toByte()
+                }
+                out
             } else {
-                // PCM 直接写入
-                if (track?.playState == AudioTrack.PLAYSTATE_PLAYING) {
-                    track?.write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
-                }
+                audio
             }
+
+            // 入队，超出容量则丢弃最老的帧，防止延迟累积
+            while (queueBytes() + pcmBytes.size > maxQueueBytes) {
+                pcmQueue.poll()
+            }
+            pcmQueue.offer(pcmBytes)
+
+            // 唤起播放循环
+            drainQueueNonBlocking()
         }
     }
 
@@ -91,18 +117,33 @@ class RemotePlayer {
         }
 
         val minBuf = AudioTrack.getMinBufferSize(sr, channelOut, AudioFormat.ENCODING_PCM_16BIT)
-        val bufferSize = maxOf(minBuf, sr * ch * 2 / 10)
+        val targetBuf = sr * ch * 2 / 5 // 约 200ms buffer
+        val bufferSize = maxOf(minBuf * 2, targetBuf)
 
-        track = AudioTrack(
-            AudioManager.STREAM_MUSIC,
-            sr,
-            channelOut,
-            AudioFormat.ENCODING_PCM_16BIT,
-            bufferSize,
-            AudioTrack.MODE_STREAM
-        )
+        // 通话场景使用 VOICE_COMMUNICATION 属性，尽量与录音路由一致
+        val attributes = AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build()
+
+        val format = AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+            .setSampleRate(sr)
+            .setChannelMask(channelOut)
+            .build()
+
+        track = AudioTrack.Builder()
+            .setAudioAttributes(attributes)
+            .setAudioFormat(format)
+            .setBufferSizeInBytes(bufferSize)
+            .setTransferMode(AudioTrack.MODE_STREAM)
+            .build()
+
         track?.play()
         started.set(true)
+        Log.i(TAG, "AudioTrack init: sr=$sr, ch=$ch, bufferSize=$bufferSize, minBuf=$minBuf, lastWriteCostMs=$lastWriteCostMs")
+        // 初次启动尝试预充一帧，减少首包卡顿
+        drainQueueNonBlocking(preloadOnly = true)
     }
 
     private fun initOpusDecoder(sr: Int, ch: Int) {
@@ -132,6 +173,7 @@ class RemotePlayer {
             track?.pause()
             track?.flush()
             track?.stop()
+            pcmQueue.clear()
         }
     }
 
@@ -149,9 +191,36 @@ class RemotePlayer {
         track = null
         currentSr = 0
         currentCh = 0
+        pcmQueue.clear()
 
         releaseOpusDecoder()
     }
 
     fun release() = executor.execute { releaseInternal() }
+
+    private fun queueBytes(): Int {
+        var sum = 0
+        pcmQueue.forEach { sum += it.size }
+        return sum
+    }
+
+    /**
+     * 将队列数据以非阻塞方式写出，避免 100ms 阻塞。
+     * preloadOnly 为 true 时只写一帧用于预充，避免过多写入阻塞 UI。
+     */
+    private fun drainQueueNonBlocking(preloadOnly: Boolean = false) {
+        val t = track ?: return
+        var writtenFrames = 0
+        while (true) {
+            val chunk = pcmQueue.poll() ?: break
+            val res = t.write(chunk, 0, chunk.size, AudioTrack.WRITE_NON_BLOCKING)
+            if (res < 0) {
+                Log.w(TAG, "AudioTrack write failed: $res, chunk=${chunk.size}")
+                break
+            }
+            writtenFrames++
+            if (preloadOnly) break
+            if (writtenFrames > 50) break // 防止一次性写太多占用线程
+        }
+    }
 }

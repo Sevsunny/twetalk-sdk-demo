@@ -267,7 +267,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                     AudioConfig()
                 }
 
-                micRecorder = MicRecorder(audioConfig) { audioData ->
+                micRecorder = MicRecorder(this@BaseChatActivity, audioConfig) { audioData ->
                     onAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
                 }.also { 
                     it.init()

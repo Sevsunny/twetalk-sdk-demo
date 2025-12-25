@@ -1,12 +1,15 @@
 package com.tencent.twetalk_sdk_demo.audio
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import android.util.Log
 import com.tencent.twetalk.audio.OpusBridge
 import com.tencent.twetalk.audio.model.OpusEncoderParams
@@ -16,6 +19,7 @@ import com.tencent.twetalk.util.PcmUtil
  * 音频采集
  */
 class MicRecorder(
+    private val context: Context,
     private val config: AudioConfig,
     private val onAudioData: (ByteArray) -> Unit
 ) {
@@ -26,6 +30,9 @@ class MicRecorder(
     // AudioRecord 相关
     private var audioRecord: AudioRecord? = null
     private var recordThread: Thread? = null
+    private val audioManager: AudioManager? = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+    private var previousAudioMode: Int? = null
+    private val audioSource: Int = MediaRecorder.AudioSource.VOICE_COMMUNICATION
     
     // 音频效果处理器
     private var aec: AcousticEchoCanceler? = null
@@ -68,11 +75,18 @@ class MicRecorder(
         checkDeviceCapabilities()
         
         try {
+            // 通话场景：提前切换到 MODE_IN_COMMUNICATION，避免录音/播放期间反复切换导致抖动
+            ensureCommunicationAudioMode()
+
             // 初始化 AudioRecord
             initAudioRecord()
             
             // 初始化音频效果处理器
-            initAudioEffects()
+            if (audioSource == MediaRecorder.AudioSource.VOICE_COMMUNICATION) {
+                Log.i(TAG, "使用 VOICE_COMMUNICATION 源，跳过 AEC/AGC/NS 以避免前处理冲突")
+            } else {
+                initAudioEffects()
+            }
             
             // 初始化编码器（如果需要）
             if (config.formatType == AudioFormatType.OPUS) {
@@ -114,11 +128,11 @@ class MicRecorder(
         
         // 启动录音线程
         recordThread = Thread({
+            try {
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
+            } catch (_: Throwable) {}
             recordLoop()
-        }, "MicRecorder-Thread").apply {
-            priority = Thread.MAX_PRIORITY
-            start()
-        }
+        }, "MicRecorder-Thread").apply { start() }
         
         Log.i(TAG, "开始录音")
     }
@@ -215,11 +229,11 @@ class MicRecorder(
         
         // 计算缓冲区大小
         val minBuf = AudioRecord.getMinBufferSize(config.sampleRate, channelConfig, audioFormat)
-        bufferSize = maxOf(minBuf, frameBytes * 4)
+        bufferSize = maxOf(minBuf * 2, frameBytes * 2)
         
         // 创建 AudioRecord
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
+            audioSource,
             config.sampleRate,
             channelConfig,
             audioFormat,
@@ -230,9 +244,28 @@ class MicRecorder(
             throw IllegalStateException("AudioRecord 初始化失败")
         }
         
-        Log.i(TAG, "AudioRecord 初始化成功: sampleRate=${config.sampleRate}, " +
+        Log.i(TAG, "AudioRecord 初始化成功: source=$audioSource, sampleRate=${config.sampleRate}, " +
                 "channels=${config.channelCount}, bitDepth=${config.bitDepth}, " +
                 "frameBytes=$frameBytes, bufferSize=$bufferSize")
+
+        // 记录实际落地参数，便于排查系统回退或静音
+        audioRecord?.let { ar ->
+            val actualFormat = when (ar.audioFormat) {
+                AudioFormat.ENCODING_PCM_16BIT -> "PCM_16BIT"
+                AudioFormat.ENCODING_PCM_8BIT -> "PCM_8BIT"
+                AudioFormat.ENCODING_PCM_FLOAT -> "PCM_FLOAT"
+                else -> "UNKNOWN(${ar.audioFormat})"
+            }
+            val bufferFrames = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                ar.bufferSizeInFrames.toString()
+            } else {
+                "N/A"
+            }
+            Log.i(TAG, "AudioRecord 实际参数: source=$audioSource, " +
+                    "sampleRate=${ar.sampleRate}, channels=${ar.channelCount}, " +
+                    "format=$actualFormat, bufferFrames=$bufferFrames, " +
+                    "sessionId=${ar.audioSessionId}")
+        }
     }
 
     /**
@@ -241,38 +274,59 @@ class MicRecorder(
     private fun initAudioEffects() {
         val audioSessionId = audioRecord?.audioSessionId ?: return
         
-        // 初始化 AEC（回声消除）
-        if (config.enableAEC && AudioCapabilityDetector.isAECSupported()) {
-            try {
-                aec = AcousticEchoCanceler.create(audioSessionId)
-                aec?.enabled = true
-                Log.i(TAG, "AEC（回声消除）已启用")
-            } catch (e: Exception) {
-                Log.e(TAG, "AEC 初始化失败", e)
-            }
-        }
+//        // 初始化 AEC（回声消除）
+//        if (config.enableAEC && AudioCapabilityDetector.isAECSupported()) {
+//            try {
+//                aec = AcousticEchoCanceler.create(audioSessionId)
+//                aec?.enabled = true
+//                Log.i(TAG, "AEC（回声消除）已启用")
+//            } catch (e: Exception) {
+//                Log.e(TAG, "AEC 初始化失败", e)
+//            }
+//        }
         
-        // 初始化 AGC（自动增益控制）
-        if (config.enableAGC && AudioCapabilityDetector.isAGCSupported()) {
-            try {
-                agc = AutomaticGainControl.create(audioSessionId)
-                agc?.enabled = true
-                Log.i(TAG, "AGC（自动增益控制）已启用")
-            } catch (e: Exception) {
-                Log.e(TAG, "AGC 初始化失败", e)
-            }
+//        // 初始化 AGC（自动增益控制）
+//        if (config.enableAGC && AudioCapabilityDetector.isAGCSupported()) {
+//            try {
+//                agc = AutomaticGainControl.create(audioSessionId)
+//                agc?.enabled = true
+//                Log.i(TAG, "AGC（自动增益控制）已启用")
+//            } catch (e: Exception) {
+//                Log.e(TAG, "AGC 初始化失败", e)
+//            }
+//        }
+//
+//        // 初始化 NS（噪声抑制）
+//        if (config.enableNS && AudioCapabilityDetector.isNSSupported()) {
+//            try {
+//                ns = NoiseSuppressor.create(audioSessionId)
+//                ns?.enabled = true
+//                Log.i(TAG, "NS（噪声抑制）已启用")
+//            } catch (e: Exception) {
+//                Log.e(TAG, "NS 初始化失败", e)
+//            }
+//        }
+    }
+
+    private fun ensureCommunicationAudioMode() {
+        val am = audioManager ?: return
+        if (previousAudioMode == null) {
+            previousAudioMode = am.mode
         }
-        
-        // 初始化 NS（噪声抑制）
-        if (config.enableNS && AudioCapabilityDetector.isNSSupported()) {
-            try {
-                ns = NoiseSuppressor.create(audioSessionId)
-                ns?.enabled = true
-                Log.i(TAG, "NS（噪声抑制）已启用")
-            } catch (e: Exception) {
-                Log.e(TAG, "NS 初始化失败", e)
-            }
+        if (am.mode != AudioManager.MODE_IN_COMMUNICATION) {
+            am.mode = AudioManager.MODE_IN_COMMUNICATION
+            Log.i(TAG, "AudioManager 已切换到 MODE_IN_COMMUNICATION，previous=$previousAudioMode")
         }
+    }
+
+    private fun restoreAudioModeIfNeeded() {
+        val am = audioManager ?: return
+        val prev = previousAudioMode ?: return
+        if (am.mode != prev) {
+            am.mode = prev
+            Log.i(TAG, "AudioManager 已恢复为模式 $prev")
+        }
+        previousAudioMode = null
     }
 
     /**
@@ -313,37 +367,46 @@ class MicRecorder(
      * 录音循环
      */
     private fun recordLoop() {
-        val pcmBuffer = ByteArray(frameBytes)
-        
+        val readBuffer = ByteArray(bufferSize)
+        val frameBuffer = ByteArray(frameBytes)
+        var frameOffset = 0
+
         Log.i(TAG, "录音线程开始")
-        
+        var totalReads = 0
+        var zeroReads = 0
+        var errorReads = 0
+
         while (isRecording) {
             try {
-                // 读取 PCM 数据
-                val readBytes = audioRecord?.read(pcmBuffer, 0, pcmBuffer.size) ?: break
-                
+                val readBytes = audioRecord?.read(readBuffer, 0, readBuffer.size) ?: break
+
                 if (readBytes <= 0) {
+                    if (readBytes == 0) zeroReads++ else errorReads++
                     Log.w(TAG, "读取音频数据失败: $readBytes")
                     continue
                 }
-                
-                // 获取实际读取的数据
-                val audioData = if (readBytes == pcmBuffer.size) {
-                    pcmBuffer.copyOf()
-                } else {
-                    pcmBuffer.copyOf(readBytes)
+                totalReads++
+
+                var cursor = 0
+                while (cursor < readBytes) {
+                    val copyLen = minOf(frameBytes - frameOffset, readBytes - cursor)
+                    System.arraycopy(readBuffer, cursor, frameBuffer, frameOffset, copyLen)
+                    frameOffset += copyLen
+                    cursor += copyLen
+
+                    if (frameOffset == frameBytes) {
+                        processAudioData(frameBuffer.copyOf())
+                        frameOffset = 0
+                    }
                 }
-                
-                // 处理音频数据
-                processAudioData(audioData)
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "录音循环异常", e)
                 break
             }
         }
-        
-        Log.i(TAG, "录音线程结束")
+
+        Log.i(TAG, "录音线程结束，统计: totalReads=$totalReads, zeroReads=$zeroReads, errorReads=$errorReads")
     }
 
     /**
@@ -433,7 +496,7 @@ class MicRecorder(
         } catch (e: Exception) {
             Log.e(TAG, "释放 AudioRecord 失败", e)
         }
-        
+
         // 关闭文件写入器
         try {
             fileWriter?.close()
@@ -445,6 +508,8 @@ class MicRecorder(
         } catch (e: Exception) {
             Log.e(TAG, "关闭文件写入器失败", e)
         }
+
+        restoreAudioModeIfNeeded()
     }
 
     /**
