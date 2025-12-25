@@ -29,6 +29,7 @@ class RemotePlayer {
     private var currentSr = 0
     private var currentCh = 0
     private val started = AtomicBoolean(false)
+    private val draining = AtomicBoolean(false)
 
     // Opus 解码器
     private var opusDecoderHandle: Long = 0
@@ -77,7 +78,7 @@ class RemotePlayer {
             pcmQueue.offer(pcmBytes)
 
             // 唤起播放循环
-            drainQueueNonBlocking()
+            startDrainingLoop()
         }
     }
 
@@ -170,6 +171,7 @@ class RemotePlayer {
 
     fun stop() {
         executor.execute {
+            draining.set(false)
             track?.pause()
             track?.flush()
             track?.stop()
@@ -179,6 +181,7 @@ class RemotePlayer {
 
     private fun releaseInternal() {
         started.set(false)
+        draining.set(false)
 
         track?.let { t ->
             try {
@@ -202,6 +205,40 @@ class RemotePlayer {
         var sum = 0
         pcmQueue.forEach { sum += it.size }
         return sum
+    }
+
+    /**
+     * 启动持续的播放循环,确保队列中的数据都被消费完
+     */
+    private fun startDrainingLoop() {
+        if (!draining.compareAndSet(false, true)) {
+            return  // 已经在运行中
+        }
+        
+        executor.execute {
+            try {
+                while (started.get() && track != null) {
+                    if (pcmQueue.isEmpty()) {
+                        // 队列为空,等待新数据
+                        Thread.sleep(10)
+                        // 连续空队列 5 次后退出循环
+                        var emptyCount = 0
+                        while (pcmQueue.isEmpty() && emptyCount < 5) {
+                            Thread.sleep(10)
+                            emptyCount++
+                        }
+                        if (pcmQueue.isEmpty()) {
+                            break
+                        }
+                    }
+                    
+                    drainQueueNonBlocking(maxFrames = 10)
+                    Thread.sleep(5)  // 避免过度占用 CPU
+                }
+            } finally {
+                draining.set(false)
+            }
+        }
     }
 
     /**
