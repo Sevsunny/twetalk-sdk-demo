@@ -7,7 +7,7 @@ import android.media.AudioTrack
 import android.os.Process
 import android.util.Log
 import com.tencent.twetalk.audio.OpusBridge
-import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -34,8 +34,8 @@ class RemotePlayer {
     private var opusDecoderHandle: Long = 0
     private val opusBridge = OpusBridge.getInstance()
     private var lastWriteCostMs = 0L
-    private val pcmQueue = ConcurrentLinkedQueue<ByteArray>()
-    private val maxQueueBytes = 16000 / 50 * 2 * 5 // 约 100ms * 5 = 500ms 容量（16k单声道16bit）
+    private val pcmQueue = ConcurrentLinkedDeque<ByteArray>()
+    private val maxQueueBytes = 16000 * 2  // 1 秒容量（16k单声道16bit）
 
 
     fun play(audio: ByteArray, sampleRate: Int, channels: Int, isPCM: Boolean = true) {
@@ -142,8 +142,8 @@ class RemotePlayer {
         track?.play()
         started.set(true)
         Log.i(TAG, "AudioTrack init: sr=$sr, ch=$ch, bufferSize=$bufferSize, minBuf=$minBuf, lastWriteCostMs=$lastWriteCostMs")
-        // 初次启动尝试预充一帧，减少首包卡顿
-        drainQueueNonBlocking(preloadOnly = true)
+        // 初次启动尝试预充多帧，减少首包卡顿
+        drainQueueNonBlocking(preloadOnly = true, maxFrames = 5)
     }
 
     private fun initOpusDecoder(sr: Int, ch: Int) {
@@ -206,21 +206,42 @@ class RemotePlayer {
 
     /**
      * 将队列数据以非阻塞方式写出，避免 100ms 阻塞。
-     * preloadOnly 为 true 时只写一帧用于预充，避免过多写入阻塞 UI。
+     * preloadOnly 为 true 时只写 maxFrames 帧用于预充，避免过多写入阻塞 UI。
      */
-    private fun drainQueueNonBlocking(preloadOnly: Boolean = false) {
+    private fun drainQueueNonBlocking(preloadOnly: Boolean = false, maxFrames: Int = 50) {
         val t = track ?: return
         var writtenFrames = 0
-        while (true) {
+        
+        while (writtenFrames < maxFrames) {
             val chunk = pcmQueue.poll() ?: break
-            val res = t.write(chunk, 0, chunk.size, AudioTrack.WRITE_NON_BLOCKING)
-            if (res < 0) {
-                Log.w(TAG, "AudioTrack write failed: $res, chunk=${chunk.size}")
-                break
+            var offset = 0
+            var remaining = chunk.size
+            
+            // 循环写入直到全部写入或缓冲区满
+            while (remaining > 0) {
+                val res = t.write(chunk, offset, remaining, AudioTrack.WRITE_NON_BLOCKING)
+
+                if (res < 0) {
+                    Log.w(TAG, "AudioTrack write failed: $res, remaining=$remaining")
+                    // 写入错误，放回队列头部
+                    if (remaining < chunk.size) {
+                        pcmQueue.offerFirst(chunk.copyOfRange(offset, chunk.size))
+                    } else {
+                        pcmQueue.offerFirst(chunk)
+                    }
+                    return
+                } else if (res == 0) {
+                    // 缓冲区满，放回队列头部稍后再试
+                    pcmQueue.offerFirst(chunk.copyOfRange(offset, chunk.size))
+                    return
+                }
+
+                offset += res
+                remaining -= res
             }
+            
             writtenFrames++
-            if (preloadOnly) break
-            if (writtenFrames > 50) break // 防止一次性写太多占用线程
+            if (preloadOnly && writtenFrames >= maxFrames) break
         }
     }
 }
