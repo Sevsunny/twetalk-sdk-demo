@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <!-- 出于安全，建议仅允许你的 WS 域名走明文 -->
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>
