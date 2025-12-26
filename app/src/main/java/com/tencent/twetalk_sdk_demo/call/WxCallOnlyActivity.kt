@@ -31,6 +31,7 @@ import com.tencent.twetalk.transport.WebSocketTransport
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.audio.AudioConfig
+import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
 import com.tencent.twetalk_sdk_demo.audio.MicRecorder
 import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
 import com.tencent.twetalk_sdk_demo.data.Constants
@@ -231,7 +232,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     private fun initMicRecorder() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val audioConfig = AudioConfig()
+                val audioConfig = AudioConfig(formatType = AudioFormatType.OPUS, chunkMs = 60)
                 micRecorder = MicRecorder(this@WxCallOnlyActivity, audioConfig) { audioData ->
                     if (isWebSocketConnected && callState == CallState.IN_PROGRESS) {
                         client?.sendCustomAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
@@ -616,6 +617,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         super.onDestroy()
         timerJob?.cancel()
         timerJob = null
+        client?.close()
+        client = null
         stopRecording()
         stopVibration()
         player.release()
