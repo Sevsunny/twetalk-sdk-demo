@@ -85,6 +85,7 @@
     <string name="system_prompt">系统提示词</string>
     <string name="greeting_message">欢迎语</string>
     <string name="default_voice_type">默认音色</string>
+    <string name="fast_voice_type">复刻音色</string>
     <string name="config_name">配置名称</string>
     
     <!-- STT 配置 -->

@@ -247,6 +247,7 @@ class AiConfigActivity : AppCompatActivity() {
             if (voiceType != null) {
                 binding.etDefaultVoiceType.setText(voiceType.toString())
             }
+            binding.etFastVoiceType.setText(basicConfig.getString("FastVoiceType") ?: "")
         }
 
         // STT 配置
@@ -518,6 +519,10 @@ class AiConfigActivity : AppCompatActivity() {
             if (voiceType.isNotEmpty()) {
                 basicConfig.defaultVoiceType = voiceType.toIntOrNull()
             }
+            val fastVoiceType = binding.etFastVoiceType.text.toString()
+            if (fastVoiceType.isNotEmpty()) {
+                basicConfig.fastVoiceType = fastVoiceType
+            }
             config.basicConfig = basicConfig
         }
 
@@ -627,7 +632,8 @@ class AiConfigActivity : AppCompatActivity() {
     private fun hasBasicConfig(): Boolean {
         return binding.etSystemPrompt.text.toString().isNotEmpty() ||
                 binding.etGreetingMessage.text.toString().isNotEmpty() ||
-                binding.etDefaultVoiceType.text.toString().isNotEmpty()
+                binding.etDefaultVoiceType.text.toString().isNotEmpty() ||
+                binding.etFastVoiceType.text.toString().isNotEmpty()
     }
 
     /**
