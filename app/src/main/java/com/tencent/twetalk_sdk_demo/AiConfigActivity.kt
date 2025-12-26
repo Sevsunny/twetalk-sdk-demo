@@ -127,6 +127,159 @@ class AiConfigActivity : AppCompatActivity() {
                 isConversationConfigExpanded
             )
         }
+        
+        // 设置开关监听器
+        setupSwitchListeners()
+    }
+    
+    /**
+     * 设置开关监听器,控制输入框的启用/禁用状态
+     */
+    private fun setupSwitchListeners() {
+        // STT 开关
+        binding.switchSTTEnabled.setOnCheckedChangeListener { _, isChecked ->
+            updateSTTFieldsEnabled(isChecked)
+        }
+        
+        // LLM 开关
+        binding.switchLLMEnabled.setOnCheckedChangeListener { _, isChecked ->
+            updateLLMFieldsEnabled(isChecked)
+        }
+        
+        // TTS 开关
+        binding.switchTTSEnabled.setOnCheckedChangeListener { _, isChecked ->
+            updateTTSFieldsEnabled(isChecked)
+        }
+        
+        // 会话配置开关
+        binding.switchConversationConfigEnabled.setOnCheckedChangeListener { _, isChecked ->
+            updateConversationFieldsEnabled(isChecked)
+        }
+        
+        // 空闲检测开关
+        binding.switchIdleEnabled.setOnCheckedChangeListener { _, isChecked ->
+            updateIdleDetectionFieldsEnabled(isChecked)
+        }
+        
+        // 初始化时根据开关状态设置输入框状态
+        updateSTTFieldsEnabled(binding.switchSTTEnabled.isChecked)
+        updateLLMFieldsEnabled(binding.switchLLMEnabled.isChecked)
+        updateTTSFieldsEnabled(binding.switchTTSEnabled.isChecked)
+        updateConversationFieldsEnabled(binding.switchConversationConfigEnabled.isChecked)
+        updateIdleDetectionFieldsEnabled(binding.switchIdleEnabled.isChecked)
+    }
+    
+    /**
+     * 更新 STT 配置字段的启用状态
+     */
+    private fun updateSTTFieldsEnabled(enabled: Boolean) {
+        binding.etSTTType.isEnabled = enabled
+        binding.etSTTConfig.isEnabled = enabled
+        
+        val alpha = if (enabled) 1.0f else 0.3f
+        binding.etSTTType.alpha = alpha
+        binding.etSTTConfig.alpha = alpha
+    }
+    
+    /**
+     * 更新 LLM 配置字段的启用状态
+     */
+    private fun updateLLMFieldsEnabled(enabled: Boolean) {
+        binding.etLLMType.isEnabled = enabled
+        binding.etLLMModel.isEnabled = enabled
+        binding.switchLLMStreaming.isEnabled = enabled
+        binding.etTemperature.isEnabled = enabled
+        binding.etMaxTokens.isEnabled = enabled
+        binding.etTopP.isEnabled = enabled
+        binding.etLLMConfig.isEnabled = enabled
+        
+        val alpha = if (enabled) 1.0f else 0.3f
+        binding.etLLMType.alpha = alpha
+        binding.etLLMModel.alpha = alpha
+        binding.switchLLMStreaming.alpha = alpha
+        binding.etTemperature.alpha = alpha
+        binding.etMaxTokens.alpha = alpha
+        binding.etTopP.alpha = alpha
+        binding.etLLMConfig.alpha = alpha
+    }
+    
+    /**
+     * 更新 TTS 配置字段的启用状态
+     */
+    private fun updateTTSFieldsEnabled(enabled: Boolean) {
+        binding.etTTSType.isEnabled = enabled
+        binding.etSpeed.isEnabled = enabled
+        binding.etVolume.isEnabled = enabled
+        binding.etPitch.isEnabled = enabled
+        binding.etTTSConfig.isEnabled = enabled
+        
+        val alpha = if (enabled) 1.0f else 0.3f
+        binding.etTTSType.alpha = alpha
+        binding.etSpeed.alpha = alpha
+        binding.etVolume.alpha = alpha
+        binding.etPitch.alpha = alpha
+        binding.etTTSConfig.alpha = alpha
+    }
+    
+    /**
+     * 更新会话配置字段的启用状态
+     */
+    private fun updateConversationFieldsEnabled(enabled: Boolean) {
+        binding.etSessionTimeout.isEnabled = enabled
+        binding.switchInterruptionEnabled.isEnabled = enabled
+        binding.etMaxContextTokens.isEnabled = enabled
+        binding.switchEmotionEnabled.isEnabled = enabled
+        binding.switchSemanticVADEnabled.isEnabled = enabled
+        binding.switchNoiseFilterEnabled.isEnabled = enabled
+        binding.switchIdleEnabled.isEnabled = enabled
+        
+        val alpha = if (enabled) 1.0f else 0.3f
+        binding.etSessionTimeout.alpha = alpha
+        binding.switchInterruptionEnabled.alpha = alpha
+        binding.etMaxContextTokens.alpha = alpha
+        binding.switchEmotionEnabled.alpha = alpha
+        binding.switchSemanticVADEnabled.alpha = alpha
+        binding.switchNoiseFilterEnabled.alpha = alpha
+        binding.switchIdleEnabled.alpha = alpha
+        
+        // 如果会话配置被禁用,空闲检测也应该被禁用
+        if (!enabled) {
+            updateIdleDetectionFieldsEnabled(false)
+        } else {
+            updateIdleDetectionFieldsEnabled(binding.switchIdleEnabled.isChecked)
+        }
+    }
+    
+    /**
+     * 更新空闲检测配置字段的启用状态
+     */
+    private fun updateIdleDetectionFieldsEnabled(enabled: Boolean) {
+        val conversationEnabled = binding.switchConversationConfigEnabled.isChecked
+        val actualEnabled = enabled && conversationEnabled
+        
+        binding.etIdleTimeout.isEnabled = actualEnabled
+        binding.etIdleMaxRetries.isEnabled = actualEnabled
+        binding.btnAddIdleResponse.isEnabled = actualEnabled
+        
+        val alpha = if (actualEnabled) 1.0f else 0.3f
+        binding.etIdleTimeout.alpha = alpha
+        binding.etIdleMaxRetries.alpha = alpha
+        binding.btnAddIdleResponse.alpha = alpha
+        
+        // 更新所有空闲响应视图的启用状态
+        for (view in idleResponseViews) {
+            val etRetryCount = view.findViewById<TextInputEditText>(R.id.etRetryCount)
+            val etResponseMessage = view.findViewById<TextInputEditText>(R.id.etResponseMessage)
+            val btnRemove = view.findViewById<View>(R.id.btnRemoveIdleResponse)
+            
+            etRetryCount.isEnabled = actualEnabled
+            etResponseMessage.isEnabled = actualEnabled
+            btnRemove.isEnabled = actualEnabled
+            
+            etRetryCount.alpha = alpha
+            etResponseMessage.alpha = alpha
+            btnRemove.alpha = alpha
+        }
     }
 
     /**
@@ -168,6 +321,22 @@ class AiConfigActivity : AppCompatActivity() {
         setupIdleResponseRemoveButton(newView, index)
         
         binding.layoutIdleResponsesContainer.addView(newView)
+        
+        // 设置新视图的启用状态
+        val enabled = binding.switchIdleEnabled.isChecked && binding.switchConversationConfigEnabled.isChecked
+        val alpha = if (enabled) 1.0f else 0.3f
+        
+        val etRetryCount = newView.findViewById<TextInputEditText>(R.id.etRetryCount)
+        val etResponseMessage = newView.findViewById<TextInputEditText>(R.id.etResponseMessage)
+        val btnRemove = newView.findViewById<View>(R.id.btnRemoveIdleResponse)
+        
+        etRetryCount.isEnabled = enabled
+        etResponseMessage.isEnabled = enabled
+        btnRemove.isEnabled = enabled
+        
+        etRetryCount.alpha = alpha
+        etResponseMessage.alpha = alpha
+        btnRemove.alpha = alpha
     }
 
     /**
@@ -303,6 +472,7 @@ class AiConfigActivity : AppCompatActivity() {
         // 会话配置
         val conversationConfig = json.getJSONObject("ConversationConfig")
         if (conversationConfig != null) {
+            binding.switchConversationConfigEnabled.isChecked = true
             val sessionTimeout = conversationConfig.getInteger("SessionTimeout")
             if (sessionTimeout != null) {
                 binding.etSessionTimeout.setText(sessionTimeout.toString())
