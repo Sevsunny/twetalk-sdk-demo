@@ -119,6 +119,8 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
     }
 
     override fun stopChat() {
+        player.stop()
+        stopRecording()
         mqttManager?.callback = null
         client.disconnect()
     }
