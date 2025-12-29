@@ -360,9 +360,9 @@
 
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- 视频聊天选择 -->
+            <!-- 聊天设置 -->
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardVideoChat"
+                android:id="@+id/cardChatSettings"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="24dp"
@@ -379,7 +379,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
-                        android:text="@string/video_chat"
+                        android:text="@string/chat_settings"
                         android:textColor="@color/gray_text"
                         android:textSize="16sp"
                         android:textStyle="bold" />
@@ -396,7 +396,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="是否开启视频聊天"
+                            android:text="@string/enable_video_chat"
                             android:textColor="@color/gray_text"
                             android:textSize="14sp" />
 
@@ -408,6 +408,28 @@
 
                     </LinearLayout>
 
+                    <!-- 按键说话参数 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="@string/enable_push_to_talk"
+                            android:textColor="@color/gray_text"
+                            android:textSize="14sp" />
+
+                        <com.google.android.material.switchmaterial.SwitchMaterial
+                            android:id="@+id/switchPushToTalk"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:checked="false" />
+
+                    </LinearLayout>
 
                 </LinearLayout>
 

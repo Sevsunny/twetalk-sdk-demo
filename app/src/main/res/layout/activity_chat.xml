@@ -127,17 +127,6 @@
             android:gravity="center"
             android:orientation="horizontal">
 
-            <!-- 暂停/继续按钮 -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnPause"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginEnd="16dp"
-                android:contentDescription="暂停"
-                app:icon="@drawable/ic_pause"
-                app:iconTint="@color/selector_icon_tint_gray" />
-
             <!-- 主录音按钮 -->
             <com.google.android.material.floatingactionbutton.FloatingActionButton
                 android:id="@+id/fabRecord"
@@ -148,17 +137,6 @@
                 app:srcCompat="@drawable/ic_mic"
                 app:tint="@color/white"
                 app:fabSize="normal" />
-
-            <!-- 停止按钮 -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnStop"
-                style="@style/Widget.Material3.Button.IconButton"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:layout_marginStart="16dp"
-                android:contentDescription="停止"
-                app:icon="@drawable/ic_stop"
-                app:iconTint="@color/selector_icon_tint_error" />
 
         </LinearLayout>
 

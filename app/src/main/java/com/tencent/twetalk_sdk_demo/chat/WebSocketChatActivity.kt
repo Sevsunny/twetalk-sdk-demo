@@ -150,6 +150,11 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                 if (isVideoMode) {
                     startRecording()
                     cameraManager?.startCamera()
+                } else {
+                    // 音频模式：非按键说话模式下自动开始录音
+                    if (!isPushToTalkMode) {
+                        startRecording()
+                    }
                 }
 
                 if (!isVideoMode) {

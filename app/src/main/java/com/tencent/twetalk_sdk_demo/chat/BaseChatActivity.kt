@@ -57,12 +57,12 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private lateinit var messageAdapter: ChatMessageAdapter
     private val handler = Handler(Looper.getMainLooper())
     private var isRecording = false
-    private var isPaused = false
     private var connectionType: String = ""
     private var audioFormatStr: String = ""
     protected var isConnected = false
     protected val player = RemotePlayer()
     protected var isVideoMode = false
+    protected var isPushToTalkMode = false  // 按键说话模式
     protected var cameraManager: VideoChatCameraManager? = null
 
     private var micRecorder: MicRecorder? = null
@@ -128,6 +128,8 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     override fun initView() {
         isVideoMode = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
             ?.getBoolean(Constants.KEY_VIDEO_MODE) ?: false
+        isPushToTalkMode = intent.getBundleExtra(Constants.KEY_CHAT_BUNDLE)
+            ?.getBoolean(Constants.KEY_PUSH_TO_TALK) ?: false
 
         loadConnectionInfo()
 
@@ -272,6 +274,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                 }.also { 
                     it.init()
                     isMicRecorderInitialized = true
+                    Log.d(TAG, "MicRecorder 初始化完成")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "MicRecorder init failed", e)
@@ -342,47 +345,46 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
     private fun setupAudioControls() {
         setupRecordButton()
-        setupControlButtons()
     }
 
     @SuppressLint("ClickableViewAccessibility")
     private fun setupRecordButton() {
-        binding.fabRecord.setOnTouchListener { v, event ->
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    if (!isPaused) {
-                        startRecording()
+        if (isPushToTalkMode) {
+            // 按键说话模式：按住录音，松开停止
+            binding.fabRecord.setOnTouchListener { v, event ->
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        if (!isRecording) {
+                            startRecording()
+                        }
+                        true
                     }
 
-                    true
-                }
-
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    if (isRecording) {
-                        stopRecording()
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (isRecording) {
+                            stopRecording()
+                        }
+                        true
                     }
 
-                    true
+                    else -> false
                 }
-
-                else -> false
             }
-        }
-    }
-
-    private fun setupControlButtons() {
-        binding.btnPause.setOnClickListener {
-            if (isPaused) {
-                resumeRecording()
-            } else {
-                pauseRecording()
+            
+            // 更新提示文本
+            binding.tvRecordHint.text = getString(R.string.hold_to_speak)
+        } else {
+            // 非按键说话模式：点击切换录音状态
+            binding.fabRecord.setOnClickListener {
+                if (isRecording) {
+                    stopRecording()
+                } else {
+                    startRecording()
+                }
             }
-        }
-
-        binding.btnStop.setOnClickListener {
-            if (isRecording) {
-                stopRecording()
-            }
+            
+            // 更新提示文本
+            binding.tvRecordHint.text = getString(R.string.start_recording)
         }
     }
 
@@ -472,7 +474,9 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     protected fun startRecording() {
-        if (isPaused) return
+        if (isRecording) {
+            return
+        }
 
         if (isMicRecorderInitialized) {
             performRecording()
@@ -512,6 +516,10 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             showToast("麦克风未就绪，请重试")
             return
         }
+        
+        if (isRecording) {
+            return
+        }
 
         isRecording = true
         micRecorder?.start()
@@ -519,44 +527,35 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         if (!isVideoMode && isNotInCall()) {
             lifecycleScope.launch {
                 updateRecordingUI(true)
-                binding.tvRecordHint.text = getString(R.string.release_to_send)
-                binding.audioVisualizerContainer.visibility = View.VISIBLE
-                binding.tvAudioStatus.text = getString(R.string.listening)
+                if (isPushToTalkMode) {
+                    binding.tvRecordHint.text = getString(R.string.release_to_send)
+                } else {
+                    binding.tvRecordHint.text = getString(R.string.stop_recording)
+                }
+
                 animateRecording()
             }
         }
     }
 
     protected fun stopRecording() {
+        if (!isRecording) {
+            return
+        }
+        
         isRecording = false
         micRecorder?.stop()
 
         if (!isVideoMode && isNotInCall()) {
             lifecycleScope.launch {
                 updateRecordingUI(false)
-                binding.tvRecordHint.text = getString(R.string.hold_to_speak)
+                if (isPushToTalkMode) {
+                    binding.tvRecordHint.text = getString(R.string.hold_to_speak)
+                } else {
+                    binding.tvRecordHint.text = getString(R.string.start_recording)
+                }
                 binding.tvAudioStatus.text = getString(R.string.processing)
             }
-        }
-    }
-
-    private fun pauseRecording() {
-        isPaused = true
-
-        if (isNotInCall()) {
-            binding.btnPause.setIconResource(R.drawable.ic_play)
-            binding.tvAudioStatus.text = "已暂停"
-            showToast("录音已暂停")
-        }
-    }
-
-    private fun resumeRecording() {
-        isPaused = false
-
-        if (isNotInCall()) {
-            binding.btnPause.setIconResource(R.drawable.ic_pause)
-            binding.tvAudioStatus.text = getString(R.string.listening)
-            showToast("录音已恢复")
         }
     }
 
@@ -574,7 +573,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
     private fun animateRecording() {
         // 简单的录音动画效果
-        if (isRecording && !isPaused) {
+        if (isRecording) {
             binding.tvAudioStatus.alpha = if (binding.tvAudioStatus.alpha == 1f) 0.5f else 1f
             handler.postDelayed({ animateRecording() }, 500)
         } else {

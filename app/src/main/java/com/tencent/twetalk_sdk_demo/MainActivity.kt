@@ -209,7 +209,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         binding.cardWebSocket.isEnabled = enabled
         binding.cardTRTC.isEnabled = enabled
         binding.cardAudioFormat.alpha = if (enabled) 1.0f else 0.5f
-        binding.cardVideoChat.alpha = if (enabled) 1.0f else 0.5f
+        binding.cardChatSettings.alpha = if (enabled) 1.0f else 0.5f
         
         if (!enabled) {
             binding.tvMqttHint.visibility = View.VISIBLE
@@ -242,6 +242,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
 
                 val isVideoMode = this.getBoolean(Constants.KEY_VIDEO_MODE, false)
                 switchVideoChat.isChecked = isVideoMode
+
+                val isPushToTalk = this.getBoolean(Constants.KEY_PUSH_TO_TALK, false)
+                switchPushToTalk.isChecked = isPushToTalk
 
                 val language = this.getString(Constants.KEY_LANGUAGE, "zh")
 
@@ -295,9 +298,9 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         when (type) {
             TWeTalkConfig.TransportType.WEBSOCKET -> {
                 setCardSelected(binding.cardWebSocket)
-                // WebSocket 模式下显示音频格式和视频选项
+                // WebSocket 模式下显示音频格式和聊天设置
                 binding.cardAudioFormat.visibility = View.VISIBLE
-                binding.cardVideoChat.visibility = View.VISIBLE
+                binding.cardChatSettings.visibility = View.VISIBLE
             }
 
             TWeTalkConfig.TransportType.TRTC -> {
@@ -313,7 +316,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 
                 // TRTC 连接时暂不支持视频聊天
                 binding.switchVideoChat.isChecked = false
-                binding.cardVideoChat.visibility = View.GONE
+                binding.cardChatSettings.visibility = View.GONE
             }
         }
     }
@@ -349,6 +352,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             putString(Constants.KEY_DEVICE_NAME, deviceName)
             putString(Constants.KEY_LANGUAGE, selectedLanguage)
             putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
+            putBoolean(Constants.KEY_PUSH_TO_TALK, binding.switchPushToTalk.isChecked)
         }
 
         val intent = when (connectionType) {
@@ -369,6 +373,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             putString(Constants.KEY_AUDIO_TYPE, getSelectedAudioType())
             putString(Constants.KEY_LANGUAGE, selectedLanguage)
             putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
+            putBoolean(Constants.KEY_PUSH_TO_TALK, binding.switchPushToTalk.isChecked)
         }
 
         startActivity(intent)

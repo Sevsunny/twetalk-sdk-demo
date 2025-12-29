@@ -112,7 +112,7 @@ class MicRecorder(
     /**
      * 开始录音
      * 
-     * @throws IllegalStateException 如果未初始化或已经在录音
+     * @throws IllegalStateException 如果未初始化
      */
     fun start() {
         if (!isInitialized) {
@@ -120,7 +120,8 @@ class MicRecorder(
         }
 
         if (isRecording) {
-            throw IllegalStateException("MicRecorder 已经在录音中")
+            Log.d(TAG, "MicRecorder 已经在录音中，忽略重复启动")
+            return
         }
         
         isRecording = true
