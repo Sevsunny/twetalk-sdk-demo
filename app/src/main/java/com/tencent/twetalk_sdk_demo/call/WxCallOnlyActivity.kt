@@ -30,10 +30,11 @@ import com.tencent.twetalk.protocol.TweCallMessage
 import com.tencent.twetalk.transport.WebSocketTransport
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
-import com.tencent.twetalk_sdk_demo.audio.AudioConfig
-import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
-import com.tencent.twetalk_sdk_demo.audio.MicRecorder
-import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
+import com.tencent.twetalk_audio.TalkAudioController
+import com.tencent.twetalk_audio.config.AudioConfig
+import com.tencent.twetalk_audio.config.AudioFormatType
+import com.tencent.twetalk_audio.config.FrameDurationType
+import com.tencent.twetalk_audio.listener.OnRecordDataListener
 import com.tencent.twetalk_sdk_demo.data.Constants
 import com.tencent.twetalk_sdk_demo.databinding.ActivityWxCallBinding
 import com.tencent.twetalk_sdk_demo.utils.PermissionHelper
@@ -74,10 +75,9 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     // MQTT 回调
     private lateinit var mqttCallback: MqttManager.MqttConnectionCallback
 
-    // 音频
-    private val player = RemotePlayer()
-    private var micRecorder: MicRecorder? = null
-    @Volatile private var isMicRecorderInitialized = false
+    // 统一音频控制器
+    private var audioController: TalkAudioController? = null
+    @Volatile private var isAudioControllerInitialized = false
 
     // 通话计时
     private var callStartTime: Long = 0
@@ -89,7 +89,7 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     ) { permissions ->
         val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
         if (audioGranted) {
-            initMicRecorder()
+            initAudioController()
         } else {
             showToast("麦克风权限被拒绝，无法进行通话")
             selfFinish()
@@ -222,27 +222,44 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
 
     private fun ensurePermissionsAndStart() {
         if (PermissionHelper.hasPermissions(this, PermissionHelper.AUDIO_MODE_PERMISSIONS)) {
-            initMicRecorder()
+            initAudioController()
         } else {
             val missingPermissions = PermissionHelper.getMissingPermissions(this, PermissionHelper.AUDIO_MODE_PERMISSIONS)
             reqPermissions.launch(missingPermissions.toTypedArray())
         }
     }
 
-    private fun initMicRecorder() {
+    private fun initAudioController() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val audioConfig = AudioConfig(formatType = AudioFormatType.OPUS, chunkMs = 60)
-                micRecorder = MicRecorder(this@WxCallOnlyActivity, audioConfig) { audioData ->
-                    if (isWebSocketConnected && callState == CallState.IN_PROGRESS) {
-                        client?.sendCustomAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
-                    }
-                }.also {
-                    it.init()
-                    isMicRecorderInitialized = true
+                val audioConfig = AudioConfig().apply {
+                    frameDuration = FrameDurationType.MS_60
+                    formatType = AudioFormatType.OPUS
+                }
+
+                audioController = TalkAudioController(this@WxCallOnlyActivity, audioConfig).also { controller ->
+                    controller.setOnRecordDataListener(object : OnRecordDataListener {
+                        override fun onPcmData(data: ByteArray, size: Int) {
+                            // PCM 数据回调（不使用）
+                        }
+
+                        override fun onOpusData(data: ByteArray, size: Int) {
+                            // Opus 数据回调
+                            if (isWebSocketConnected && callState == CallState.IN_PROGRESS) {
+                                client?.sendCustomAudioData(data, audioConfig.sampleRate, audioConfig.channelCount)
+                            }
+                        }
+
+                        override fun onRecordError(errorCode: Int, message: String) {
+                            Log.e(TAG, "录音错误[$errorCode]: $message")
+                        }
+                    })
+
+                    controller.init()
+                    isAudioControllerInitialized = true
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "MicRecorder init failed", e)
+                Log.e(TAG, "TalkAudioController init failed", e)
             }
         }
     }
@@ -408,11 +425,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         isMuted = !isMuted
         updateMuteUI()
 
-        if (isMuted) {
-            micRecorder?.stop()
-        } else {
-            micRecorder?.start()
-        }
+        // 使用 TalkAudioController 的静音功能
+        audioController?.setMicMute(isMuted)
     }
 
     private fun updateMuteUI() {
@@ -504,13 +518,13 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
     }
 
     private fun startRecording() {
-        if (isMicRecorderInitialized && !isMuted) {
-            micRecorder?.start()
+        if (isAudioControllerInitialized && !isMuted) {
+            audioController?.startRecord()
         }
     }
 
     private fun stopRecording() {
-        micRecorder?.stop()
+        audioController?.stopRecord()
     }
 
     private fun startCallTimer() {
@@ -590,7 +604,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         val sr = if (sampleRate > 0) sampleRate else 16000
         val ch = if (channels > 0) channels else 1
         val isPcm = format == AudioFormat.PCM
-        player.play(audio, sr, ch, isPcm)
+        val formatType = if (isPcm) AudioFormatType.PCM else AudioFormatType.OPUS
+        audioController?.play(audio, sr, ch, formatType)
     }
 
     override fun onRecvTalkMessage(type: TWeTalkMessage.TWeTalkMessageType, text: String?) {
@@ -621,8 +636,8 @@ class WxCallOnlyActivity : BaseActivity<ActivityWxCallBinding>(), TWeTalkClientL
         client = null
         stopRecording()
         stopVibration()
-        player.release()
-        micRecorder?.release()
+        audioController?.release()
+        audioController = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 }

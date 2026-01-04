@@ -29,10 +29,11 @@ import com.tencent.twetalk.protocol.TweCallMessage
 import com.tencent.twetalk_sdk_demo.BaseActivity
 import com.tencent.twetalk_sdk_demo.R
 import com.tencent.twetalk_sdk_demo.adapter.ChatMessageAdapter
-import com.tencent.twetalk_sdk_demo.audio.AudioConfig
-import com.tencent.twetalk_sdk_demo.audio.AudioFormatType
-import com.tencent.twetalk_sdk_demo.audio.MicRecorder
-import com.tencent.twetalk_sdk_demo.audio.RemotePlayer
+import com.tencent.twetalk_audio.TalkAudioController
+import com.tencent.twetalk_audio.config.AudioConfig
+import com.tencent.twetalk_audio.config.AudioFormatType
+import com.tencent.twetalk_audio.config.FrameDurationType
+import com.tencent.twetalk_audio.listener.OnRecordDataListener
 import com.tencent.twetalk_sdk_demo.call.CallAction
 import com.tencent.twetalk_sdk_demo.call.CallConfigManager
 import com.tencent.twetalk_sdk_demo.call.CallState
@@ -60,13 +61,13 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     private var connectionType: String = ""
     private var audioFormatStr: String = ""
     protected var isConnected = false
-    protected val player = RemotePlayer()
     protected var isVideoMode = false
     protected var isPushToTalkMode = false  // 按键说话模式
     protected var cameraManager: VideoChatCameraManager? = null
 
-    private var micRecorder: MicRecorder? = null
-    @Volatile private var isMicRecorderInitialized = false
+    // 统一音频控制器
+    private var audioController: TalkAudioController? = null
+    @Volatile private var isAudioControllerInitialized = false
 
     // 通话状态
     protected var isCalling = false  // 正在来电/呼叫中
@@ -100,7 +101,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                 if ((audioGranted && cameraGranted) || PermissionHelper.hasPermissions(this,
                         PermissionHelper.VIDEO_MODE_PERMISSIONS)) {
                     startChat()
-                    initMicRecorder()
+                    initAudioController()
                 } else {
                     val deniedPermissions = mutableListOf<String>()
                     if (!audioGranted) deniedPermissions.add("麦克风")
@@ -114,7 +115,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             else -> {
                 if (audioGranted) {
                     startChat()
-                    initMicRecorder()
+                    initAudioController()
                 } else {
                     showToast("麦克风权限被拒绝")
                     finish()
@@ -162,6 +163,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
 
         binding.videoChat.fabEndCall.setOnClickListener {
             stopRecording()
+            audioController?.stopPlay()
             stopChat()
         }
 
@@ -253,7 +255,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
     }
 
-    private fun initMicRecorder() {
+    private fun initAudioController() {
         // TODO 修改适配一下,如果是使用 TRTC 采集音频的情况
         if (isTRTCConnected()) {
             return
@@ -262,25 +264,55 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 val audioConfig = if (audioFormatStr.equals("OPUS", true)) {
-                    AudioConfig(chunkMs = 60, formatType = AudioFormatType.OPUS)
+                    AudioConfig().apply {
+                        formatType = AudioFormatType.OPUS
+                    }
                 } else {
-//                    val pcmFile = File(this@BaseChatActivity.getExternalFilesDir(null), "test_${System.currentTimeMillis()}.pcm")
-//                    AudioConfig(saveToFile = true, filePath = pcmFile.absolutePath)
                     AudioConfig()
                 }
 
-                micRecorder = MicRecorder(this@BaseChatActivity, audioConfig) { audioData ->
-                    onAudioData(audioData, audioConfig.sampleRate, audioConfig.channelCount)
-                }.also { 
-                    it.init()
-                    isMicRecorderInitialized = true
-                    Log.d(TAG, "MicRecorder 初始化完成")
+                audioController = TalkAudioController(this@BaseChatActivity, audioConfig).also { controller ->
+                    controller.setOnRecordDataListener(object : OnRecordDataListener {
+                        override fun onPcmData(data: ByteArray, size: Int) {
+                            // PCM 数据回调（如果需要）
+                        }
+
+                        override fun onOpusData(data: ByteArray, size: Int) {
+                            // Opus 数据回调
+                            if (audioConfig.formatType == AudioFormatType.OPUS) {
+                                onAudioData(data, audioConfig.sampleRate, audioConfig.channelCount)
+                            }
+                        }
+
+                        override fun onRecordError(errorCode: Int, message: String) {
+                            Log.e(TAG, "录音错误[$errorCode]: $message")
+                        }
+                    })
+
+                    // 如果是 PCM 格式，需要在 onPcmData 中回调
+                    if (audioConfig.formatType == AudioFormatType.PCM) {
+                        controller.setOnRecordDataListener(object : OnRecordDataListener {
+                            override fun onPcmData(data: ByteArray, size: Int) {
+                                onAudioData(data, audioConfig.sampleRate, audioConfig.channelCount)
+                            }
+
+                            override fun onOpusData(data: ByteArray, size: Int) {}
+
+                            override fun onRecordError(errorCode: Int, message: String) {
+                                Log.e(TAG, "录音错误[$errorCode]: $message")
+                            }
+                        })
+                    }
+
+                    controller.init()
+                    isAudioControllerInitialized = true
+                    Log.d(TAG, "TalkAudioController 初始化完成")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "MicRecorder init failed", e)
+                Log.e(TAG, "TalkAudioController init failed", e)
 
                 lifecycleScope.launch(Dispatchers.Main) {
-                    showToast("麦克风初始化失败: ${e.message}")
+                    showToast("音频控制器初始化失败: ${e.message}")
                 }
             }
         }
@@ -465,7 +497,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         
         if (PermissionHelper.hasPermissions(this, requiredPermissions)) {
             startChat()
-            initMicRecorder()
+            initAudioController()
         } else {
             // 请求缺失的权限
             val missingPermissions = PermissionHelper.getMissingPermissions(this, requiredPermissions)
@@ -478,7 +510,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             return
         }
 
-        if (isMicRecorderInitialized) {
+        if (isAudioControllerInitialized) {
             performRecording()
             return
         }
@@ -489,15 +521,15 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
                 val startTime = System.currentTimeMillis()
                 val timeout = 5000L // 5秒超时
 
-                while (!isMicRecorderInitialized && (System.currentTimeMillis() - startTime) < timeout) {
+                while (!isAudioControllerInitialized && (System.currentTimeMillis() - startTime) < timeout) {
                     Thread.sleep(50)
                 }
 
-                if (!isMicRecorderInitialized) {
-                    Log.e(TAG, "MicRecorder initialization timeout")
+                if (!isAudioControllerInitialized) {
+                    Log.e(TAG, "TalkAudioController initialization timeout")
 
                     withContext(Dispatchers.Main) {
-                        showToast("麦克风初始化超时，请重试")
+                        showToast("音频控制器初始化超时，请重试")
                     }
 
                     return@withContext
@@ -511,9 +543,9 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     }
 
     private fun performRecording() {
-        if (micRecorder == null) {
-            Log.e(TAG, "MicRecorder is null")
-            showToast("麦克风未就绪，请重试")
+        if (audioController == null) {
+            Log.e(TAG, "TalkAudioController is null")
+            showToast("音频控制器未就绪，请重试")
             return
         }
         
@@ -522,7 +554,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
 
         isRecording = true
-        micRecorder?.start()
+        audioController?.startRecord()
 
         if (!isVideoMode && isNotInCall()) {
             lifecycleScope.launch {
@@ -544,7 +576,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         }
         
         isRecording = false
-        micRecorder?.stop()
+        audioController?.stopRecord()
 
         if (!isVideoMode && isNotInCall()) {
             lifecycleScope.launch {
@@ -591,7 +623,8 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
         val sr = if (sampleRate > 0) sampleRate else 16000
         val ch = if (channels > 0) channels else 1
         val isPcm = format == AudioFormat.PCM
-        player.play(audio, sr, ch, isPcm)
+        val formatType = if (isPcm) AudioFormatType.PCM else AudioFormatType.OPUS
+        audioController?.play(audio, sr, ch, formatType)
     }
 
     /**
@@ -609,7 +642,7 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
             TWeTalkMessage.TWeTalkMessageType.USER_LLM_TEXT -> {
                 // 打断机器人的话
                 ConversationManager.interruptAssistant()
-                player.stop()
+                audioController?.stopPlay()
                 // 通知用户对话
                 ConversationManager.onUserLLMText(text ?: "")
             }
@@ -885,10 +918,9 @@ abstract class BaseChatActivity : BaseActivity<ActivityChatBinding>() {
     protected fun isTRTCConnected(): Boolean = connectionType == "TRTC"
 
     private fun releaseInternal() {
-        isMicRecorderInitialized = false
-        player.release()
-        micRecorder?.release()
-        micRecorder = null
+        isAudioControllerInitialized = false
+        audioController?.release()
+        audioController = null
         cameraManager?.release()
         cameraManager = null
     }

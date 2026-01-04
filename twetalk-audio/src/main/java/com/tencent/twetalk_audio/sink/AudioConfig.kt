@@ -1,4 +1,4 @@
-package com.tencent.twetalk_sdk_demo.audio
+package com.tencent.twetalk_audio.sink
 
 /**
  * 音频格式枚举

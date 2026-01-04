@@ -1,12 +1,11 @@
-package com.tencent.twetalk_sdk_demo.audio
+package com.tencent.twetalk_audio.sink
 
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import android.os.Process
 import android.util.Log
-import com.tencent.twetalk.audio.OpusBridge
+import com.tencent.twetalk_audio.opus.OpusBridge
 import java.util.concurrent.ConcurrentLinkedDeque
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean

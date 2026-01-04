@@ -1,4 +1,4 @@
-package com.tencent.twetalk_sdk_demo.audio
+package com.tencent.twetalk_audio.sink
 
 import android.media.MediaCodecList
 import android.media.audiofx.AcousticEchoCanceler

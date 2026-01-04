@@ -1,4 +1,4 @@
-package com.tencent.twetalk_sdk_demo.audio
+package com.tencent.twetalk_audio.sink
 
 import android.annotation.SuppressLint
 import android.content.Context
@@ -10,10 +10,11 @@ import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import android.os.Build
+import android.os.Process
 import android.util.Log
-import com.tencent.twetalk.audio.OpusBridge
-import com.tencent.twetalk.audio.model.OpusEncoderParams
-import com.tencent.twetalk.util.PcmUtil
+import com.tencent.twetalk_audio.opus.OpusBridge
+import com.tencent.twetalk_audio.opus.OpusEncoderParams
+import com.tencent.twetalk_audio.utils.PcmUtil
 
 /**
  * 音频采集
@@ -130,7 +131,7 @@ class MicRecorder(
         // 启动录音线程
         recordThread = Thread({
             try {
-                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_AUDIO)
+                Process.setThreadPriority(Process.THREAD_PRIORITY_AUDIO)
             } catch (_: Throwable) {}
             recordLoop()
         }, "MicRecorder-Thread").apply { start() }
