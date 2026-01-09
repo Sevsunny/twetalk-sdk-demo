@@ -42,6 +42,7 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
         val deviceName = bundle?.getString(Constants.KEY_DEVICE_NAME, "")
         val audioType = bundle?.getString(Constants.KEY_AUDIO_TYPE, "PCM")
         val language = bundle?.getString(Constants.KEY_LANGUAGE, "zh")
+        val botId = bundle?.getString(Constants.KEY_BOT_ID, "")
 
         mqttCallback = object : MqttManager.MqttConnectionCallback {
             override fun onConnected() {
@@ -77,6 +78,11 @@ class WebSocketChatActivity : BaseChatActivity(), TWeTalkClientListener {
                                 "${url}_vl"
                             } else {
                                 url
+                            }
+                            
+                            // 设置 botId（如果不为空）
+                            if (!botId.isNullOrEmpty()) {
+                                setBotId(botId)
                             }
                         }
 

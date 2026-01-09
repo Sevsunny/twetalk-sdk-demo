@@ -253,6 +253,10 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
                 } else {
                     spinnerLanguage.setSelection(0)
                 }
+
+                // 加载 botId
+                val botId = this.getString(Constants.KEY_BOT_ID, "")
+                etBotId.setText(botId)
             }
         }
     }
@@ -343,6 +347,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
         val prefs = getDefaultSharedPreferences(this)
         val productId = prefs.getString(Constants.KEY_PRODUCT_ID, "") ?: ""
         val deviceName = prefs.getString(Constants.KEY_DEVICE_NAME, "") ?: ""
+        val botId = binding.etBotId.text?.toString()?.trim() ?: ""
 
         // 跳转到聊天界面
         val bundle = Bundle().apply {
@@ -353,6 +358,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             putString(Constants.KEY_LANGUAGE, selectedLanguage)
             putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
             putBoolean(Constants.KEY_PUSH_TO_TALK, binding.switchPushToTalk.isChecked)
+            putString(Constants.KEY_BOT_ID, botId)
         }
 
         val intent = when (connectionType) {
@@ -374,6 +380,7 @@ class MainActivity : BaseActivity<ActivityMainBinding>() {
             putString(Constants.KEY_LANGUAGE, selectedLanguage)
             putBoolean(Constants.KEY_VIDEO_MODE, binding.switchVideoChat.isChecked)
             putBoolean(Constants.KEY_PUSH_TO_TALK, binding.switchPushToTalk.isChecked)
+            putString(Constants.KEY_BOT_ID, botId)
         }
 
         startActivity(intent)

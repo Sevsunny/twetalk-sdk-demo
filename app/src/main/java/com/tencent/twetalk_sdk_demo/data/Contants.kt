@@ -21,6 +21,7 @@ object Constants {
     const val KEY_USER_ID = "user_id"
     const val KEY_VIDEO_MODE = "video_mode"
     const val KEY_PUSH_TO_TALK = "push_to_talk"
+    const val KEY_BOT_ID = "bot_id"
 
     /** 通话配置参数 **/
     const val KEY_WXA_APP_ID = "wxa_app_id"

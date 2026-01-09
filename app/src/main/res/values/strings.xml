@@ -27,6 +27,10 @@
     <string name="chinese">中文</string>
     <string name="english">English</string>
     
+    <!-- AI 配置 -->
+    <string name="bot_id">Bot ID</string>
+    <string name="bot_id_hint">请输入智能体 ID（可选）</string>
+    
     <!-- 参数配置 -->
     <string name="product_id">Product ID</string>
     <string name="device_name">Device Name</string>
