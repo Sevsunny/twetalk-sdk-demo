@@ -30,3 +30,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "twetalk-sdk-demo"
 include(":app")
+include(":twetalk-audio")
